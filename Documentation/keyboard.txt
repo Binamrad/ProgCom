@@ -1,0 +1,9 @@
+when a key is pressed the keycode is sent over the serial connection the keyboard is connected to
+I have no Idea what numbers each keypress sends.
+for communication protocoll, see serialbus.txt in the documentation
+
+When a key is released the negative key code is sent.
+for example, if a key gives code 64 when pressed, it gives -64 when released
+most if not all characters on the keyboard should correspond to their ASCII
+values when pressed.
+Most if not all keys on the keyboard should be represented

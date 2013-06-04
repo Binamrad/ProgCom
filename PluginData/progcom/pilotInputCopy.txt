@@ -1,0 +1,22 @@
+;this code copies the pilots entered values into the control registers
+;thus, if everything works, the ship should act like the computer isn't there
+.text
+#global main
+main:
+	rd	r1, r0, GLOBAL_PILOT_THROTTLE
+	wr	r1, r0, GLOBAL_MAINTHROTTLE
+	rd	r1, r0, GLOBAL_PILOT_YAW
+	wr	r1, r0, GLOBAL_YAW
+	rd	r1, r0, GLOBAL_PILOT_PITCH
+	wr	r1, r0, GLOBAL_PITCH
+	rd	r1, r0, GLOBAL_PILOT_ROLL
+	wr	r1, r0, GLOBAL_ROLL
+	rd	r1, r0, GLOBAL_PILOT_RCS_RIGHT
+	wr	r1, r0, GLOBAL_RCS_RIGHT
+	rd	r1, r0, GLOBAL_PILOT_RCS_UP
+	wr	r1, r0, GLOBAL_RCS_UP
+	rd	r1, r0, GLOBAL_PILOT_RCS_FORWARD
+	wr	r1, r0, GLOBAL_RCS_FORWARD
+	
+
+	br	main

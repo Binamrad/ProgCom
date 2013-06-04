@@ -1,0 +1,89 @@
+;for a runnable program, see 'navigator.txt' file
+.text
+;parameters: int in r1
+;returns: int in r1
+#global libm_iSqrt
+libm_iSqrt:
+	movi	r2, 32768
+	movi	r3, 0
+	libm_iSqrt_loop:
+	add	r3, r3, r2
+	mul	r4, r3, r3
+	bl	r4, r1, libm_iSqrt_loop2
+	beq	r4, r1, libm_iSqrt_end
+	sub	r3, r3, r2
+	libm_iSqrt_loop2:
+	sri	r2, r2, 1
+	bi	r2, libm_iSqrt_loop
+	libm_iSqrt_end:
+	mov	r1, r3
+	jmpr	ra
+
+.data
+#global libm_sqrt
+#global libm_div1024
+libm_div1024:
+	0.0009765625
+
+libm_sqrt_025f:
+	0.25
+
+.text
+;arguments: float in r1
+;returns: float in r1
+libm_sqrt:
+	;voodoo
+	mov	r3, r1
+	movhi	r2, 8192
+	sri	r1, r1, 1
+	add	r1, r1, r2
+	movhi	r2, 64
+	sub	r1, r1, r2
+
+	;babylonian method
+	;step1
+	fflush
+	fpush	r3
+	fpush	r1
+	fdiv
+	fpush	r1
+	fadd
+	
+	;step2
+	rd	r2, r0, libm_sqrt_025f
+	fpop	r1
+	fpush	r1
+	fpush	r2
+	fmul
+	fpush	r3
+	fpush	r1
+	fdiv
+	fadd
+	fpop	r1
+	
+	jmpr	ra
+
+;arguments: fixed-point number in r1 (int)
+;precision ammount in r2 (int)
+;returns: float in r1
+libm_fixpToFloat:
+	fpush	r1
+	ftof
+	fpush	r2
+	ftof
+	fdiv
+	fpop	r1
+	jmpr	ra
+
+;arguments: float in r1
+;returns a fixed point int on the format c*1024
+libm_toFixedPoint:
+	fpush	r1
+	movi	r1, 1024
+	fpush	r1
+	ftof
+	fmul
+	ftoi
+	pop	r1
+	jmpr	ra
+

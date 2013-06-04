@@ -1,0 +1,71 @@
+;extended instruction set
+;mostly small macros
+.text
+
+;convert pointer to byte pointer
+#macro toptr8 rA rB {
+	sli	rA, rB, 2
+}
+
+#macro add8 rA rB rC {
+	add	rA, rB, rC
+	andi	rA, rA, 255
+}
+
+#macro sub8 rA rB rC {
+	sub	rA, rB, rC
+	andi	rA, rA, 255
+}
+
+;read a 8-bit integer from memory using a byte pointer
+#macro rd8 rA rB C {
+	rd	rA, rB, C
+	push	a13
+	movi	a13, rB
+	andi	a13, a13, 3
+	sli	a13, a13, 5
+	sr	rA, rA, a13
+	pop	a13
+	andi	rA, rA, 255
+}
+
+;return
+#macro ret {
+	jmpr	ra
+}
+
+;roll right
+#macro ror rA rB rC {
+	shr	rA, rB, rC
+	ax	rA, rA
+}
+
+;roll left
+#macro rol rA rB rC {
+	shl	rA, rB, rC
+	ax	rA, rA
+}
+
+;roll left immediate
+#macro rli rA rB ADDR {
+	sli	rA, rB, ADDR
+	ax	rA, rA
+}
+
+;roll right immediate
+#macro rri rA rB ADDR {
+	sri	rA, rB, ADDR
+	ax	rA, rA
+}
+
+;swaps rA and rB
+#macro swap rA rB {
+	add	rA, rA, rB;rA = rA+rB
+	sub	rB, rA, rB;rB = rA+rB-rB = rA
+	sub	rA, rA, rB;rA = rA+rB-rA = rB
+}
+
+;moves ex to rA
+#macro movx rA {
+	ax	rA, r0
+}

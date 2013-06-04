@@ -1,0 +1,342 @@
+Technical specifications:
+clock rate: 	384kHz
+memory:		64k words
+cache:		256 words instruction, 256 words data
+		2-way associative, replacement policy: LRU
+word length:	32-bit
+registers:	32
+fpu:		two 4-word stacks
+
+
+Memory:
+
+the first 128 memory locations (0->127) are reserved for memory mapped control and navigation values.
+Most of the vectors here are in a fixed point format. The ordering of the parameters of the vectors are adress = X, adress+1 = Y, adress+2 = Z.
+the accuracy of the fixed point vectors are determined by the value at GLOBAL_VERTORACCURACY. (the behind-the-scenes conversion from the floats that the game uses to the fixed point vectors is this: (int)(vector.whatever*global_vectorAccuracy)) All speed readings use *16 rather than vectoracuracy.
+these values can be accessed at the following defined adresses:
+
+label				value	explaination
+GLOBAL_MAINTHROTTLE		0	the throttle for the ship. 0 is minimum, 1024 is maximum.
+GLOBAL_YAW			1	yaw control for the ship. -1024 is minimum, 1024 is maxium.
+GLOBAL_PITCH			2	pitch control for the ship. -1024 is minimum, 1024 is maximum.
+GLOBAL_ROLL			3	roll control for the ship. -1024 is minimum, 1024 is maximum.
+GLOBAL_SURFACE_EAST		4	the eastwards vector of the surface, in x,y,z of the scene coordinate system
+GLOBAL_SURFACE_UP		7	the upwards vector of the surface, in x,y,z of the scene coordinate system
+GLOBAL_SURFACE_NORTH		10	the northwards vector of the surface
+GLOBAL_VESSEL_X			13	the x vector of the scene coordinate system according to the ship coord. system.
+GLOBAL_VESSEL_Y			16	the y vector of the scene coordinate system according to the ship coord. system
+GLOBAL_VESSEL_HEADING		16	same as above
+GLOBAL_VESSEL_Z			19	the z vector of the scene coordinate system according to the ship coord. system
+GLOBAL_ORBITSPEED		22	the orbital speed vector (speed*direction) of the ship th scene coord. system
+GLOBAL_SURFACESPEED		25	the surface speed vector (speed*direction) of the ship in scene coord. system
+GLOBAL_ANGULARVELOCITY		28	the angular velocity vector of the ship
+GLOBAL_ALTITUDE			31	the altitude of the ship, in metres. (this is not a fixed point number)
+GLOBAL_NUMPAD_OUT		32	the locations for the numpad output numbers. 
+GLOBAL_NUMPAD_MSG		36	the final numpad output location. functionally the same but with another label.
+GLOBAL_NUMPAD_IN		37	the numpad input location.
+GLOBAL_NUMPAD_NEWIN		38	this adress is set to 1 when use user presses enter on the numpad. must be set to 0 by a program.
+GLOBAL_NUMPAD_FORMAT		39	this adress is read to determine the format of the output. Each output area has 2 bits to determine it's format. 0 = integer, 1 = floating point. 2 & 3 are unused at the moment.
+GLOBAL_TIMER			40	the cpu:s timer is accessible at this adress. it contains the number of cycles that has elapsed since the timer last reset. can be written to and read from as normal.
+GLOBAL_VECTORACCURACY	  	41	the accuracy for the fixed-point vectors the computer uses to represent position and rotation. defaults to 1024.
+GLOBAL_SCREEN_MODE		42	screen mode register
+GLOBAL_IENABLE			44	interrupt enable, see interrupts.
+GLOBAL_CLOCK			45	the computer clock. contains the complete ammount of cycles that the computer has spent turned on.
+GLOBAL_IADRESS			46	the adress the execution jumps to at interrupts, see interrupts below.
+GLOBAL_TIMER_MAX		47	the value at which the timer starts over at zero. if set to 0, the timer never resets.
+GLOBAL_PILOT_THROTTLE		48	the pilot-entered value for the throttle. 0 is minimum, 1024 is maximum.
+GLOBAL_PILOT_YAW		49	the pilot-entered value for the yaw. -1024 is minimum, 1024 is maxium.
+GLOBAL_PILOT_PITCH		50	the pilot-entered value for the pitch. -1024 is minimum, 1024 is maxium.
+GLOBAL_PILOT_ROLL		51	the pilot-entered value for the roll. -1024 is minimum, 1024 is maxium.
+GLOBAL_PILOT_RCS_RIGHT		52	the pilot-entered value for rcs right. -1024 is minimum, 1024 is maxium.
+GLOBAL_PILOT_RCS_UP		53	the pilot-entered value for rcs up. -1024 is minimum, 1024 is maxium.
+GLOBAL_PILOT_RCS_FORWARD	54	the pilot-entered value for rcs forward. -1024 is minimum, 1024 is maxium.
+GLOBAL_RCS_RIGHT		52	RCS rightwards control for the ship. -1024 is minimum, 1024 is maxium.
+GLOBAL_RCS_UP			53	RCS upwards control for the ship. -1024 is minimum, 1024 is maxium.
+GLOBAL_RCS_FORWARD		54	RCS forward control for the ship. -1024 is minimum, 1024 is maxium.
+GLOBAL_ACTIONGROUP		55	Activation of actiongroups. see Misc section at the bottom of the document.
+
+other labels:
+PROG_POS			the location the program is loaded at
+TEXT_START			the location where the non-automatically generated code starts.
+DATA_START			the location in memory where the data section of the code is located.
+DATA_END			the location in memory where the end of the data section is located.
+GLOBAL_SCREEN			the screen data pointer
+GLOBAL_SCREEN_COLOR		screen color map
+GLOBAL_SCREEN_FONT		font map
+
+Registers:
+
+r0->r15 register 0 to 15
+note:
+	r0	can also be accessed as zero, is always locked to 0
+	r15	is set to pc when call/callr is used and pc-1 when loop is used. can also be accessed as ra (Return Adress).
+	r14	is used by the push/pop instructions. Should be set to point at a stack. can also be accessed as sp (Stack Pointer).
+	r13	can also be accessed as fp (Frame Pointer).
+	Thus, you might want to be careful when overriding r13->r15
+
+a0->a15 	auxilliary registers, register 16 to 31. Can be used exactly as the other registers, they just use a different naming scheme.
+note:
+	a14	can also be accessed as es, exeption status. If interrupts are enabled, this register can change unpredictably.
+	a15	can also be accessed as ea, exception adress. If interrupts are enabled, this register can change unpredictably.
+
+EX 		"extra" register
+note:
+	EX 	cannot be accessed the same way as r0->r15 and a0->a15.
+	EX 	contains overflow/underflow from addition, subtraction, multiplication and bitshifting. It also contains the remainder after division.
+
+
+Instructions:
+
+rA = first register specified
+rB = second register specified
+rC = third register specified
+C = constant, 16-bit unsigned integer
+lC = long constant, 21-bit unsigned integer
+pc = program counter, 16-bit unsigned integer
+
+Most instructions are written on the form
+"instruction rA rB rC/C/lC"
+sometimes one or several are left out, but they are always listed in that order.
+
+Name:		Meaning:			Result:				Example:
+
+add		ADD				rA = rB + rC			add	r1, r2, r3
+addi		ADD Immediate			rA = rB + C			addi	r1, r2, 4
+sub		SUBtract			rA = rB - rC			sub	r1, r2, r3
+subi		SUBtract Immediate		rA = rB - C			subi	r1, r2, 4
+mul		MULtiply			rA = rB * rC			mul	r1, r2, r3
+muli		MULtiply Immediate		rA = rB * C			muli	r1, r2, 4
+div		DIVide				rA = rB / rC			div	r1, r2, r3
+divi		DIVide Immediate		rA = rB / C			divi	r1, r2, 4
+mov		MOVe				rA = rB				mov	r1, r2
+movi		MOVe Immediate			rA = C				movi	r1, 4
+movil		MOVe Immediate Long		rA = lC				movil	r1, 600000
+movhi		MOVe HIgh			rA = C  << 16			movhi	r1, 4
+shl		SHift Left			rA = rB << rC			shl	r1, r2, r3
+sli		Shift Left Immediate		rA = rB << C			sli	r1, r2, 4
+shr		SHift Right			rA = rB >> rC			shr	r1, r2, r3
+sri		Shift Right Immediate		rA = rB >> C			sri	r1, r2, 4
+and		bitwise AND			rA = rB & rC			and	r1, r2, r3
+andi		bitwise	AND Immediate		rA = rB & C			andi	r1, r2, 4
+or		bitwise OR			rA = rB | rC			or	r1, r2, r3
+ori		bitwise OR Immediate		rA = rB ^ C			ori	r1, r2, 4
+xor		bitwise XOR			rA = rB ^ rC			xor	r1, r2, r3
+xori		botwise XOR Immediate		rA = rB ^ C			xori	r1, r2, 4
+not		Not				rC = rC ^ -1			not	r1
+ax		Add eX				rA = rB + EX			ax	r1, r2
+sx		Subtract eX			rA = rB - EX			sx	r1, r2
+br		BRanch				pc += C				br	label
+brr		BRanch Register			pc += rC			brr	r1
+jmp		JuMP				pc = C				jmp	label
+jmpr		JuMP Register			pc = rC				jmpr	r1
+beq		Branch if EQual			pc += C  if rA == rB		beq	r1, r2, label
+bi		Branch If not zero		pc += C  if rA != r0		bi	r1, label
+bne		Branch if Not Equal		pc += C	 if rA != rB		bne	r1, r2, label
+bl		Branch if Less than		pc += C  if rA < rB		bl	r1, r2, label
+ble		Branch if Less or Equal		pc += C  if rA <= rB		ble	r1, r2, label
+call		CALL				r15 = pc, pc += C		call	label
+callr		CALL Register			r15 = pc, pc = rC		call	r1
+bx		Branch eX 			px += C  if EX != 0		bx	label
+rd		ReaD				rA = mem(rB + C)		rd	r1, r2, label
+rdx		ReaD eX				EX = mem(rB + C)		rdx	r1, label
+wr		WRite				mem(rB+C) = rA			wr	r1, r2, label
+push		PUSH to stack top		mem(r14) = rA, r14 = r14 + 1	push	r1
+pop		POP stack top			r14 = r14 - 1, rA = mem(r14)	pop	r1
+halt		HALT				stop the emulator		halt
+nop		NO Operation			nothing				nop
+cmp		CoMPare				rA = -1 if rB < rC, rA = 0 if rB == rC, else rA = 1
+flcmp		FLoating point CoMPare		rA = -1 if rB < rC, rA = 0 if rB == rC, else rA = 1 note: will only work if rB and rC are floating point numbers
+int		INTerrupt			if exceptions are enabled, this spawns an exception and copies the argument to register es (ea = pc, es = rC, pc = GLOBAL_IADRESS if GLOBAL_IENABLE & 1 == 1) 
+eret		Exception RETurn		pc = ea, enables interrupts.	eret
+
+floating point instructions:
+The operands in the floating point operations are ordered like this: (top-1) * top, (top-1) - top, (top-1) / top, (top-1) + top.
+note that both floating point stacks can perform operations simultaneously, and that the cpu does not have to wait for them to finish their operations, unless using the fpush/fpop instructions
+
+Name:		Meaning:
+
+fpush		push rA to stack
+fpush1		push floating point 1 to stack
+fpushn1		push floating point -1 to stack
+fpushpi		push floating point pi to stack
+fpop		rA = top of floating point stack
+fadd		pop two numbers from stack, perform addition, push result to stack
+fsub		pop two numbers from stack, perform subtraction, push result to stack
+fmul		pop two numbers from stack, perform multiplication, push result to stack
+fdiv		pop two numbers from stack, perform division, push result to stack
+fsel0		select floating stack 0
+fsel1		select floating stack 1
+fmerge		adds the top number of stack 0 to top number of stack 1, result pushed to stack 0
+ftof		converts the integer at the top of the stack to a floating point number, and pushes on the stack
+ftoi		converts the floating point number at the top of the stack to integer, and pushes on the stack
+fflush		removes all entries from the selected floating point stack and aborts all operations
+
+
+Interrupts:
+
+in order to enable interrupts the memory at adress "GLOBAL_IENABLE" needs to be modified.
+the different bits in the memory adress have the following effect:
+bit	0:	enables interrupts
+	1:	enables interrupts from the timer
+	2:	enables interrupts when the flight status variables (yaw etc) are updated.
+	3:	enables interrupts when GLOBAL_NUMPAD_NEWIN != 0
+	4+:	does nothing yet
+
+when an interrupt occurs pc is immidiately set to the adress stored at "GLOBAL_IADRESS".
+when the cpu jumps, interrupts are immidiately disabled.
+one interrupt can be handled per instruction executed.
+
+when hardware exceptions occur, values of 256 or higher are copied into the es register. this is what the values mean:
+256:	timer has flipped to 0
+257:	flight status variables updated (pitch, yaw etc.)
+258:	unimplemented/illegal instruction at ea-1 (unless the interrupt has been delayed, in which case the instruction could be anywhere)
+259:	input from numpad available (note: this exception will keep appearing while GLOBAL_NUMPAD_NEWIN != 0)
+260+:	not implemented yet.
+
+
+Assembler:
+
+The ".meta", ".data" and ".text" sections:
+
+All intructions for the assembler needs to follow one of these tags.
+If something other than a comment is not surrounded by a tag, the compiler will give the error: "text outside of specified field"
+You can have multiple instrances of the same section in each file.
+When the code is compiled the fields are merged together in the order they appear, so the last .data section specified will be at the bottom of the .data section.
+when using the #include keyword all fields are merged so that the #included fields are placed last
+
+The ".meta" tag signifies that you are trying to tell the assembler how to compile your code. Within this field you can change these options:
+PIC		default: off	will make a bunch of errors if you try to perform an operation that cannot be done if you don't know where the program is loaded
+MAINJMP		default: on	will add the line "br main" in the beginning of the file. This will make the code start execution at the "main"-label declared #global
+AUTOSTACK	default: on	will add the line "movi	sp, DATA_END" at the beginning of the file. This will automatically set the stack pointer to a good-ish position.
+ALWERR		default: off	will make sure that if there is a warning somewhere, the warning will stop compilation. This probably does nothing at the moment
+AUTLDR		default: off	gives an error message when enabled, doesn't do anything yet.
+the syntax is this:
+.meta
+PIC=FALSE
+MAINJMP=TRUE
+
+if an option is declared both true and false, the assembler will refuse to assemble the program.
+
+the .text section contains all instructions. The syntax is described elsewhere
+example:
+.text
+#global main
+main:
+	movi	r1, 1
+	movi	r2, 2
+	add	r1, r1, r2
+	wr	r1, r0, GLOBAL_NUMPAD_OUT
+	halt
+
+the .data section contains all data the program needs
+labels can still be used here
+data can be declared as hexadecimal, floating point or normal base 10 integers.
+example:
+.data
+some_data:
+0x10
+16
+16.0
+
+labels:
+
+any line where the first word ends in ':' is a location, which can be used in, for example, the jmp instruction.
+the jmp, jmpr, eret and callr instructions use the absolute rather than the relative value when modifying pc.
+All other branching instructions instructions use pc-relative addressing
+example:
+	loop:
+	nop
+	jmp loop
+will execute the nop and jmp instructions forever.
+
+keywords:
+
+#global	<label>
+this keyword will make sure that the label will be accessable from all files that #include that file.
+example:
+	#global example
+	example:
+	...
+
+#include <file>
+will merge the file you specify with the current one. A file can only be #included once
+example:
+	#include example.txt
+
+#allocate <number>
+Will put number of zero - initialised integers where the #allocate statement was placed. It can only be placed in the .data section.
+
+#string "<string>"
+will put the specified string into memory in ascii format using 4 chars per word. It will also add null-termination.
+the string will be read from the first " to the last ", anything else will be regarded as a comment
+tabs and/or multiple spaces will currently be replaced by single spaces.
+at the moment it is not possible to put formatting characters into the string (such as \t, \n etc.)
+the string must be spacified across a single line
+this keyword can only be placed in the .data section
+
+#macro <macroname> <parameters> {
+<stuff>
+}
+will create a macroinstruction called macroname, using the declared ammount of parameters.
+this macro can then be used as a normal instruction.
+example:
+#macro add3 rA rB rC {
+	add	rA, rA, rB
+	add	rA, rA, rC
+}
+
+the parameters specified in the macro definition are changed using a primitive
+find-and-replace on the old parameters using the new, so don't ever do this:
+#macro foo rA rAA {
+or this:
+#macro foo r1 r2 r3 {
+if you do, there is the possibility that the compiler can't read the lines the macro produces, which can cause confusing error messages.
+you can not use macros within macros yet.
+
+#define <defineName> <number>
+will substitute <defineName> with <number> when used as a parameter
+example:
+#define foo 16
+movi	r1, foo
+.data
+	foo
+
+
+Computer control panel:
+
+To run a program on the cpu, first write the program in a plain text file. The file can be run by using the command
+"load run <filename>" in the console.
+all programs you want to load should be stored in PluginData/programmableComputer
+
+console commands:
+load [opt: run] <filename>		load the file into memory. using the optional run command will start the file as a program. omitting the second argument will simply leave the data in memory.
+print					prints the first 100 memory locations in the dev console (alt-f2)
+clear					clears the console.
+run <number>				set pc to <number> and start the computer.
+debug					toggle the emulators debug mode. This makes it run at 120Hz and print everything it's doing to the dev console (Alt-f2).
+
+explaination of the buttons at the top of the panel:
+
+ON/OFF		turn the computer on and off
+CTL		toggles whether the computer can control pitch/yaw/roll etc. on and off. It also controls staging and translation until I implement separate buttons for that.
+TTL		toggles whether the computer may control the throttle.
+RST		resets the computer
+GUI		minimizes/maximises the computer ui panel
+
+
+Misc:
+
+regarding actiongroups:
+	the action group memory slot resets to zero at roughly the same frequency as the flight variables update, ie once per frame.
+	the numbers you write to the slot have the following effects:
+		0: 	nothing
+		1->10: 	toggle custom action group 1->10
+		11:	toggle Abort group
+		12+:	nothing, yet
+	the group is toggled when the memory slot is reset.
+	
+
+
+
+
+

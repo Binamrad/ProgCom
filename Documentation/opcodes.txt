@@ -1,0 +1,126 @@
+PC32 instruction set specification
+
+The general layout of instructions for the ProgCom CPU is this:
+ 6bits  5bits 5bits 16bits
+|XXXXXX|XXXXX|XXXXX|XXXXXXXXXXXXXXXX|
+ instr. rA    rB    address/const/rC
+
+the floating point unit operations are structured like this:
+ 6bits  5bits 17bits		4 bits
+|XXXXXX|XXXXX|XXXXXXXXXXXXXXXXX|XXXX|
+ instr. rA    unused		opcode extension
+
+instruction name:	the name of the instruction as it is used in assembly code
+cycles:			the number of cycles the cpu need to execute the instruction
+rA:			an arbitrary register
+rB:			an arbitrary register
+address/const/rC:	an arbitrary register, an address or a constant
+pc-relative:		does the instruction use pc-relative addressing?
+opcode:			the value that is contained in the instruction field
+addr. field:		some instructions use the address field as a part of the opcode or as a non-specified argument.
+
+notes:
+at the moment att branching instructions use the absolute address of the destination**
+if rA and/or rB are unused, their value is generally 0. (exception only at movil)
+
+general instructions:
+
+opcode		addr. field	instruction name	cycles	rA	rB	address/const/rC	pc-relative
+
+0x00		--		add			1	yes	yes	rC
+0x01		--		sub			1	yes	yes	rC
+0x02		--		mul			10	yes	yes	rC
+0x03		--		div			40	yes	yes	rC
+0x04		--		and			1	yes	yes	rC
+0x05		--		or			1	yes	yes	rC
+0x06		--		xor			1	yes	yes	rC
+0x07		--		not			1	no	no	rC
+0x08		--		addi			1	yes	yes	const
+0x09		--		subi			1	yes	yes	const
+0x0a		--		muli			1	yes	yes	const
+0x0b		--		divi			1	yes	yes	const
+0x0c		--		andi			1	yes	yes	const
+0x0d		--		ori			1	yes	yes	const
+0x0e		--		xori			1	yes	yes	const
+0x0f		--		--			--	--	--	--
+
+0x10		--		flcmp			1	yes	yes	rC
+0x11		--		shr			1	yes	yes	rC
+0x12		--		shl			1	yes	yes	rC
+0x13		--		ax			1	yes	yes	no
+0x14		--		sx			1	yes	yes	no
+0x15		0x0		fadd			1/2***	no	no	no
+0x15		0x1		fsub			1/2***	no	no	no
+0x15		0x2		fmul			1/15***	no	no	no
+0x15		0x3		fdiv			1/60***	no	no	no
+0x15		0x4		fmerge			1/?****	no	no	no
+0x15		0x5		ftoi			1/30***	no	no	no
+0x15		0x6		ftof			1/30***	no	no	no
+0x15		0x7		--			--	--	--	--
+0x15		0x8		fpop			?/1	yes	no	no
+0x15		0x9		fpush			?/1	yes	no	no
+0x15		0xa		fsel0			1/0	no	no	no
+0x15		0xb		fsel1			1/0	no	no	no
+0x15		0xc		fflush			1/1	no	no	no
+0x15		0xd		fpush1			1/1	no	no	no
+0x15		0xe		fpushn1			1/1	no	no	no
+0x15		0xf		fpushpi			1/1	no	no	no
+0x16		--		--			--	--	--	--
+0x17		--		cmp			1	yes	yes	rC
+0x18		--		--			--	--	--	--
+0x19		--		sri			1	yes	yes	rC
+0x1a		--		sli			1	yes	yes	rC
+0x1b		--		--			--	--	--	--
+0x1c		--		--			--	--	--	--
+0x1d		--		--			--	--	--	--
+0x1e		--		--			--	--	--	--
+0x1f		--		--			--	--	--	--
+
+0x20		--		brr			2	no	no	rC			yes
+0x21		--		--			--	--	--	--			--
+0x22		--		jmpr			2	no	no	rC			no
+0x23		--		--			--	--	--	--			--
+0x24		--		--			--	--	--	--			--
+0x25		--		--			--	--	--	--			--
+0x26		--		callr			2	no	no	rC			no
+0x27		--		--			--	--	--	--			--
+0x28		--		br			2	no	no	address			yes
+0x28		0xffff		halt			2	no	no	no			yes
+0x28		--		beq			1/2*	yes	yes	address			yes
+0x29		--		bne			1/2*	yes	yes	address			yes
+0x29		--		bi			1/2*	yes	no	address			yes
+0x2a		--		jmp			2	no	no	address			no
+0x2b		--		bl			1/2*	yes	yes	address			yes
+0x2c		--		ble			1/2*	yes	yes	address			yes
+0x2d		--		bx			1/2*	no	no	address			yes
+0x2e		--		call			1/2*	no	no	address			yes
+0x2f		--		eret			2	no	no	no			no
+
+0x30		--		mov			1	yes	no	rC
+0x30		--		nop			1	no	no	no
+0x31		--		--			--	--	--	--
+0x32		--		--			--	--	--	--
+0x33		--		--			--	--	--	--
+0x34		--		push			1/17**	no	no	rC			no
+0x35		--		pop			1/17**	yes	no	no			no
+0x36		--		--			--	--	--	--
+0x37		--		int			2	no	no	rC	
+0x38		--		movi			1	no	no	const/address
+0x38		--		movil			1	no	no	const/address
+0x39		--		movhi			1	no	no	const/address
+0x3a		--		rd			1/17**	yes	yes	const/address		no
+0x3b		--		wr			1/17**	yes	yes	const/address		no
+0x3c		--		--			--	--	--	--
+0x3d		--		--			--	--	--	--
+0x3e		--		rdx			1/17**	no	yes	const/address		no
+0x3f		--		--			--	--	--	--
+
+
+*	all branch instructions take two cycles if the branch is taken, one if it isn't
+**	all read/write instructions take one cycle if the memory location is cached, 17 otherwise (9 + row size (8) ). These are also the ammount of cycles it takes to load an instruction.
+***	The CPU always take 1 cycle to execute the instructions except for when using fpush and fpop, when it has to wait for the FPU to finish operations.
+****	Both stacks have to complete their operations before this instruction can execute. Thus, after this instruction has run, both stacks will be busy for max(floatStack0BusyCycles,floatStack1BusyCycles) +2
+
+
+
+

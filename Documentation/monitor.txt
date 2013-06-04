@@ -1,0 +1,103 @@
+This file gives a brief description of the progcom monitor.
+the monitor has two modes, a tileset-graphics text mode (Mode A) and
+a pixel graphics monochrome mode (Mode B).
+Mode A is the default mode
+
+
+Mode A:
+
+colors:		16
+resolution:	32*32 8x8 tiles
+data size:	512 words screen data + 512 words tileset
+
+Data format:
+each word in the data secion is interpreted as two characters
+each character uses 8 bit ascii code and two four-bit fields for choosing color
+for example, a 2 in color field A will set the character itself to color two, as defined in the color vector
+a 2 in color field B will set the background of the character to color 2.
+
+illustration of the data layout:
+		      col. a
+|XXXXXXXXXXXXXXXX|BBBB|AAAA|CCCCCCCC|
+second char	 col. b	   ascii code
+
+
+Mode B:
+
+colors:		monochrome
+resolution	256*256 pixels
+data size:	2048 words screen data
+
+Data format:
+each bita represent a pixel, 0 makes the pixel use color 0, while 1 makes it use color 1.
+the first word will set the first 32 bits from the upper left corner, wile successive entries will set pixels right and downwards.
+
+
+NOTES:
+when using monochrome mode, be aware that the tileset is stored inside of the screen data
+if you want to do text rendering after drawing, you need to either have your own tileset
+and put the data back, or temporarily store the standard tileset.
+
+
+locations of interest:
+
+label			location	contents
+GLOBAL_SCREEN		63488		screen data
+GLOBAL_SCREEN_COLOR	63472		color map
+GLOBAL_SCREEN_MODE	42		screen mode register
+GLOBAL_SCREEN_FONT	65024		font map
+
+detailed explaination:
+
+GLOBAL_SCREEN:
+
+this label points to the first address for storing screen data
+
+GLOBAL_SCREEN_COLOR:
+
+this label points to a vector containing 16 colors in XXXXRRRRGGGGBBBB format
+the default colors stored at this location are these:
+0:  0x00000000
+1:  0x00ffffff
+2:  0x0068372b
+3:  0x0070a4b2
+4:  0x006f3d86
+5:  0x00588d43
+6:  0x00352879
+7:  0x00b8c76f
+8:  0x006f4f25
+9:  0x00433900
+10: 0x009a6759
+11: 0x00444444
+12: 0x006c6c6c
+13: 0x009ad284
+14: 0x006c5eb5
+15: 0x00959595
+
+GLOBAL_SCREEN_FONT:
+
+this label points to the tileset used when in mode A.
+the tileset uses 512 words of data to store all tiles
+each tile takes two words in memory, so there is a total of 256 tiles.
+each tile uses 8x8 pixels, each row being one byte.
+the rows are stored so that the first row is stored as the first 8 bits in a word
+
+for example, the code for this character:
+
+00000000	
+00000000 
+00100100 
+00000000 
+00111100
+00011000
+00000000
+00000000
+
+is:
+0x00240000
+0x0000183c
+
+GLOBAL_SCREEN_MODE
+
+when set to 0, the monitor will be set to mode A, text mode
+when set to 1, the monitor will be set to mode B, monochrome

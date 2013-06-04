@@ -1,0 +1,130 @@
+;for a runnable program, see the "navigator.txt" file
+
+.text
+#include libMath.txt
+;calculates the dot product of two vectors
+;arguments: two vectors of floats loaded in r1 to r6
+;returns: one float in r1
+#global libv_dotProduct
+libv_dotProduct:
+	fsel0
+	fflush
+	fpush	r1
+	fpush	r4
+	fmul
+	fsel1
+	fflush
+	fpush	r2
+	fpush	r5
+	fmul
+	fmerge
+	fpush	r3
+	fpush	r6
+	fmul
+	fmerge
+	fsel0
+	fpop	r1
+	jmpr	ra
+
+
+;projects vector v on vector u. v is defined before u
+;arguments: two vectors of float loaded in r1 to r6
+;returns: one vector in r1 to r3
+;requires a defined stack
+#global libv_project
+libv_project:
+	push	ra
+	;stores vector values in r10 to r12
+	mov	r10, r4
+	mov	r11, r5
+	mov	r12, r6
+	call	libv_dotProduct
+	push	r1
+
+	mov	r1, r10
+	mov	r2, r11
+	mov	r3, r12
+	mov	r4, r10
+	mov	r5, r11
+	mov	r6, r12
+	; get square of vector u
+	call	libv_dotProduct
+	
+	;divide u*v by |u|^2
+	pop	r2
+	fflush
+	fpush	r2
+	fpush	r1
+	fdiv
+	fpop	r1
+
+	;multiply u by the scalar value in r1
+	fsel0
+	fflush
+	fpush	r12
+	fpush 	r1
+	fmul
+	
+	fsel1
+	fflush
+	fpush	r11
+	fpush	r1
+	fmul
+	fpop	r2
+
+	fpush	r10
+	fpush	r1
+	fmul
+	fpop	r1
+	
+	fsel0
+	fpop	r3
+	
+	pop	ra
+	;return
+	jmpr	ra
+
+;perform projection step, but don't perform final multiplication
+#global libv_projectionMagnitude
+libv_projectionMagnitude:
+	push	ra
+	mov	r10, r4
+	mov	r11, r5
+	mov	r12, r6
+	call	libv_dotProduct
+	push	r1
+	mov	r1, r10
+	mov	r2, r11
+	mov	r3, r12
+	mov	r4, r10
+	mov	r5, r11
+	mov	r6, r12
+	; get square of vector u
+	call libv_dotProduct
+	call libm_sqrt	
+
+	;divide u*v by |u|
+	pop	r2
+	fflush
+	fpush	r2
+	fpush	r1
+	fdiv
+	fpop	r1
+
+	pop	ra
+	callr	ra
+
+
+;in:  vector in r1 to r3
+;out: float in r1
+;requires stack
+#global libv_vecLength
+libv_vecLength:
+	push	ra
+	mov	r4, r1
+	mov 	r5, r2
+	mov 	r6, r3
+	call	libv_dotProduct
+	call	libm_sqrt
+	pop	ra
+	jmpr	ra

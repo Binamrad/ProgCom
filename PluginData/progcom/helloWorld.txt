@@ -1,0 +1,12 @@
+.text
+#include libText.txt
+
+#global main
+main:
+	movi	r1, string
+	call	printStr
+	halt
+
+.data
+string:
+#string "Hello, World!"

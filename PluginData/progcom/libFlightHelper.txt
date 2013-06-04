@@ -1,0 +1,102 @@
+;for a runnable program, see the "navigator.txt" file
+
+;will hold the vertical speed
+;very expensive operation
+;parameters: prefered speed in r1
+.text
+#global libfh_holdVertSpeed
+libfh_holdVertSpeed:
+	push ra
+	push r1
+	;project the velocity vector on the planet normal
+	;step1:load variables
+	movi	r4, GLOBAL_SURFACE_UP
+	rd	r6, r4, 2
+	rd	r5, r4, 1
+	rd	r4, r4, 0
+	movi	r3, GLOBAL_SURFACESPEED
+	rd	r1, r3, 0
+	rd	r2, r3, 1
+	rd	r3, r3, 2
+
+	;step2:convert to floats
+	fsel1
+	fflush
+	fsel0
+	fflush
+	rd	r7, r0, libm_div1024
+	
+	movi	r8, 16
+	fpush1
+	fpush	r8
+	ftof
+	fdiv
+	fpop	r8
+
+	;there is room for optmisations here
+	fpush	r1
+	ftof
+	fpush	r8
+	fmul
+
+	fsel1
+	fpush	r2
+	ftof
+	fpush	r8
+	fmul
+	fpop	r2
+	fsel0
+	fpop	r1
+
+	fpush	r3
+	ftof
+	fpush	r8
+	fmul
+	
+	fsel1
+	fpush	r4
+	ftof
+	fpush	r7
+	fmul
+	fpop	r4
+	fsel0
+	fpop	r3
+
+	fpush	r5
+	ftof
+	fpush	r7
+	fmul
+	
+	fsel1
+	fpush	r6
+	ftof
+	fpush	r7
+	fmul
+	fpop	r6
+	fsel0
+	fpop	r5
+	
+	;step3:perform projection
+	call	libv_projectionMagnitude
+	
+	;check the speed to see if we should throttle up
+	pop	r2
+	
+	movi	r3, 0	;if your rocket refuses to go downwards when using this, lower this number (0 min)
+	wr	r3, r0, GLOBAL_MAINTHROTTLE
+
+	;compare the two floating point numbers
+	;r2 is our desired speed, r1 our actual speed
+	flcmp	r2, r2, r1
+	
+
+	bl	r2, r0, libfh_holdVertSpeed_end
+	movi	r3, 1024 ;if your rocket refuses to go upwards when using this, increase this number (1024 max)
+	wr	r3, r0, GLOBAL_MAINTHROTTLE
+	;throttle only a little, to counter gravity
+	;or throttle max
+	libfh_holdVertSpeed_end:
+
+	;return
+	pop	ra
+	jmpr	ra

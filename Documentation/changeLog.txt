@@ -1,0 +1,94 @@
+v.0.7.2
+Fixed an issue that caused the emulator to not use the entire cache memory.
+
+
+v.0.7.1
+The monitor should no longer be blurry at lower resolutions.
+
+
+v.0.7
+the nop instruction should no longer set EX to 0
+the plugindata folder has been renamed from "ProgCom" to "progcom" to fix an issue affecting linux users
+the emulator should now properly use custom action groups 2->10
+the "float" instruction never actually existed, it has now been removed from the documentation
+since fpush0 no longer exists it has been removed from the documentation
+the cmp instruction has been documented
+when you give a label or a constant instead of rA/rB, the resulting error message should now be easier to understand
+the assembler can now store strings. This is a work-in-prograss feature.
+added a monitor
+
+
+v.0.6
+The documentation now properly states that the computer has 64k words of ram.
+The opcodes now make a little more sense
+Increased the clock speed to 384KHz
+removed the gepc and loop instructions
+added the ax, sx, bx, rdx, andi, ori, xori instructions
+overflow in addition, subtraction and multiplication is now stored in the EX register. When using division the remainder is stored.
+the #define statement is now documented
+
+
+v.0.5
+changed the int instruction to use a register instead of the address field to give a larger range of possible values to send it.
+most branching instructions have changed the way they operate, from using absolute adresses to using relative ones.
+rewrote the assembler from scratch. The assembler now supports:
+	* macros
+	* adding labels and constants
+	* writing constants and floating point data to program code
+	* dividing the code into data and code sections
+	* file-local labels
+	* specifying labels to use relative or absolute adress
+	* the assembler now automatically sets the stack pointer to a good value
+the assembler will no longer crash the game if you #include a file #including the original file
+the assembler now has slightly better syntax
+updated the documentation to include these changes and become somewhat clearer
+some error messages are now make it slightly more obvious what went wrong.
+optimized the "keepVertSpeed" thingy in libFlightHelper
+changed example code to use the new syntax
+
+
+v.0.4
+Added the text file "timings" which contains more detailed documentation on the instructions.
+I had forgotten to document the instruction gepc, it has now been added to the documentation.
+The control panel no longer shows up when using a ship without a computer thing near another ship
+There is no longer any gui-related problems with having several computers on your ship.
+Documented the memory adresses the "GLOBAL_" labels pointed to
+Added the ability for the cpu to control the RCS translation
+Improved the documentation in several areas.
+removed some debug lines from libfh_holdVertSpeed. It should no longer use up three numpad output locations.
+iSqrt in libMath was not working properly. It should be working properly now.
+slightly changed how the hardware interrupts behave.
+the assembler now is slightly more helpful when there has been a compilation error.
+you can now access the players control values.
+removed 30 cycles execution time from the fdiv instruction.
+added ability to toggle ActionGroups
+
+
+v. 0.3
+the cpu-emulator now simulates cache memory
+the cpu-emulator now handles interrupts
+the hacky multithreading support has been removed, this made the following changes necessary:
+	* removed the instructions gtid, getof, sleep
+added a clock. works like the timer but can not be changed by writing to it.
+the timer now resets when it's value is greater than that stored in GLOBAL_TIMER_MAX
+added the possibility to raise an interrupt with the timer when it resets
+added int instruction, which causes an interrupt and sets es register to the parameter
+updated the model to the new asas module
+you can now specify the level of precision the fixed-point vectors for world coordinates use by writing to GLOBAL_VECTORACCURACY. default is 1024, same as before.
+added labels GLOBAL_VECTORACCURACY, GLOBAL_IENABLE, GLOBAL_CLOCK, GLOBAL_IADRESS, GLOBAL_TIMER_MAX
+you can now use the console command "run <number>" to start the emulator and set pc to any arbitrary location
+fixed the 'subi' instruction. It now does what you'd expect it to do. (used to do nothing)
+increased clock speed to 96 KHz to compensate for increased memory access times.
+removed suggested use of registers from the instruction set manual. I felt it made the 'registers' section a bit confusing. It is now in a separate file.
+cleaned up example code
+
+
+v. 0.2
+inclreased clock speed to 48 KHz
+memory location 40 now contains a timer, measuring the time in milliseconds since the program started.
+the fadd, fsub, fdiv, fmul, fmerge floating point instructions now take 50% longer to run.
+added a label for the timer: GLOBAL_TIMER
+added a label for the output format: GLOBAL_NUMPAD_FORMAT
+the flight variables now update whenever available, instead of when the instruction "sleep" is run.
+updated the documentation to reflect these changes.
+updated the example code with the new labels

@@ -1,0 +1,71 @@
+There are 8 serail buses connected to progcom
+they start at address 64 and each use 4 addresses. They are "stacked" back to back.
+
+
+
+0: status
+1: input buffer
+2: output buffer
+3: reserved
+
+status register bits
+0: interrupt enable
+1: output buffer empty
+2: input buffer full
+3: sending
+4: receiving
+5: recipient ready
+
+INTERRUPTS:
+if interrupts are enabled an interrupt will be created if bit
+1 and/or 2 are set to 1
+
+SENDING:
+When the recipient is ready to receive something, recipient ready is set to 1
+in order to send anything over to whatever 
+is connected to the thing, just write it to the output buffer
+when sending is started, "receiving" is set to 1. it is unset when finished.
+when sending is finished, OBE will be set to 1
+
+RECEIVING
+when the interface starts to receive something "receiving" is set to 1. it is unset when finished.
+when there is something to fetch from the input buffer, IBF is set to 1. it will have to be set to 0 manually
+
+
+IMPLEMENTING A SERIAL INTERFACE
+if you want to communicate with the progcom mod, create a part or partmodule for ksp
+implement the ISerial interface
+search the vessel for a progcom part and then call the "connect" method
+example:
+foreach(Part p in vessel) {
+	if(p is ProgCom) {
+		((ProgCom) p).connect(this, 2);
+	}
+}
+there are currently 8 slots to connect to. to see if a slot is occupied, call the
+slotOccupied(int) method.
+
+METHODS IN THE ISerial INTERFACE
+void rec_bit(bool)
+this method is called once per cycle when receiving data. Each boolean value
+represents a bit that has been transmitted.
+in order to send a bit, call this method on the interface you have been connected to.
+
+void rec_sending()
+called when sending is initiated
+
+void rec_send_done()
+called when sending is done
+
+bool ready()
+returns true when the device is ready to receive data
+
+connect(ISerial sBus)
+provides the Serial bus interface you should send data to
+
+disconnect()
+called when you should no longer consider yourself connected to anything.
+
+tick(int)
+called once per executed instruction. The argument is the number of cycles
+that has elapsed since the last 
