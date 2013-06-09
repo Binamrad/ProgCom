@@ -1,3 +1,12 @@
+v.0.8
+Made it possible to activate the next stage through the actiongroup system
+there is now a keyboard for entering text with. See keyboard.txt for more info
+fixed an issue in the example code that would cause too frequent interrupts
+fixed the ascii table in libtext.txt
+it should now be possible to interface other mods to progcom. see serial.txt for more info
+made some additions to the example code for text input
+
+
 v.0.7.2
 Fixed an issue that caused the emulator to not use the entire cache memory.
 

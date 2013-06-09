@@ -1,9 +1,25 @@
-when a key is pressed the keycode is sent over the serial connection the keyboard is connected to
-I have no Idea what numbers each keypress sends.
+when a key is pressed the keycode is sent over the serial connection the keyboard is connected to (DEFAULT: 1)
 for communication protocoll, see serialbus.txt in the documentation
 
 When a key is released the negative key code is sent.
 for example, if a key gives code 64 when pressed, it gives -64 when released
-most if not all characters on the keyboard should correspond to their ASCII
-values when pressed.
-Most if not all keys on the keyboard should be represented
+unless otherwise specified, all keys with an ASCII representation sends their ascii values when pressed
+
+Key values:
+ENTER:		10
+CAPS LOCK:	301
+CTRL:		306
+RIGHT CTRL:	305
+f1-f12:		282-293
+ALT:		308
+ALT GR:		309
+INSERT:		277
+HOME:		278
+PAGE UP:	280
+PAGE DOWN:	281
+END:		279
+SCROLL LOCK:	302
+UP:		273
+DOWN:		274
+RIGHT:		275
+LEFT:		276

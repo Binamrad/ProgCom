@@ -3,149 +3,151 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-
-class Monitor
+namespace ProgCom
 {
-    Texture2D image;
-    protected Rect windowPos;
-    Int32[] mem;
-    UInt16 pointer;
-    UInt16 charSetPtr;
-    UInt16 colorPointer;
-    UInt16 modePtr;
-    Color[] colors;
-    public bool visible;
-
-    public Monitor(Int32[] arr, UInt16 ptr, UInt16 chars, UInt16 colPtr, UInt16 modePointer)
+    class Monitor
     {
-        mem = arr;
-        pointer = ptr;
-        charSetPtr = chars;
-        colors = new Color[16];
-        modePtr = modePointer;
-        for (int i = 0; i < 16; ++i) {
-            colors[i] = new Color();
-            colors[i].a = 1.0f;
-        }
-        colorPointer = colPtr;
+        Texture2D image;
+        protected Rect windowPos;
+        Int32[] mem;
+        UInt16 pointer;
+        UInt16 charSetPtr;
+        UInt16 colorPointer;
+        UInt16 modePtr;
+        Color[] colors;
+        public bool visible;
 
-        image = new Texture2D(256, 256, TextureFormat.ARGB32, false);
-        windowPos = new Rect();
-        if ((windowPos.x == 0) && (windowPos.y == 0))//windowPos is used to position the GUI window, lets set it in the center of the screen
+        public Monitor(Int32[] arr, UInt16 ptr, UInt16 chars, UInt16 colPtr, UInt16 modePointer)
         {
-            windowPos = new Rect(Screen.width / 2, Screen.height / 2, 100, 100);
-        }
-        //Set all the pixels to black. If you don't do this the image contains random junk.
-        for (int y = 0; y < image.height; y++) {
-            for (int x = 0; x < image.width; x++) {
-                image.SetPixel(x, y, Color.black);
+            mem = arr;
+            pointer = ptr;
+            charSetPtr = chars;
+            colors = new Color[16];
+            modePtr = modePointer;
+            for (int i = 0; i < 16; ++i) {
+                colors[i] = new Color();
+                colors[i].a = 1.0f;
             }
-        }
-        image.Apply();
-    }
+            colorPointer = colPtr;
 
-    private void updateColors() {
-        for (int i = 0; i < 16; ++i) {
-            int colData = mem[colorPointer + i];
-            colors[i].b = (colData & 0xff)/255.0f;
-            colors[i].g = ((colData >> 8) & 0xff)/255.0f;
-            colors[i].r = ((colData >> 16) & 0xff)/255.0f;
-        }
-    }
-
-    void drawImage()
-    {
-        updateColors();
-        if ((mem[modePtr] & 1) == 0) {
-            //colour character set
-            for (int y = 0; y < 32; ++y) {
-                for (int x = 0; x < 16; ++x) {
-                    //read four characters and all colours from text buffer
-                    //since each character+colour is 16 bit, this should net us 2 words at a time
-                    Int32 AB = mem[pointer + y * 16 + x];
-                    UInt16 A = (UInt16)(AB & 0xffff);
-                    UInt16 B = (UInt16)((AB >> 16) & 0xffff);
-                    //load the font for all characters
-                    //each character has 2 words each, so we need to read 4 total
-                    Int32 Ax = mem[charSetPtr + (A & 0xff) * 2];
-                    Int32 Ay = mem[charSetPtr + (A & 0xff) * 2 + 1];
-                    Int32 Bx = mem[charSetPtr + (B & 0xff) * 2];
-                    Int32 By = mem[charSetPtr + (B & 0xff) * 2 + 1];
-                    //render each character
-                    //problem: each character has only 8 bits/column, each font declares them as 32+32 bits.
-                    //the way around this is complicated
-                    //read 8 bits at a time...
-                    //set 8 pixels with the proper colours
-                    //jump down a row...
-                    //set 8 more colours and so on
-                    fontDraw((A >> 8) & 0xf, (A >> 12) & 0xf, Ax, Ay, 16 * x, 8 * y);
-                    fontDraw((B >> 8) & 0xf, (B >> 12) & 0xf, Bx, By, 16 * x + 8, 8 * y);
+            image = new Texture2D(256, 256, TextureFormat.ARGB32, false);
+            windowPos = new Rect();
+            if ((windowPos.x == 0) && (windowPos.y == 0))//windowPos is used to position the GUI window, lets set it in the center of the screen
+        {
+                windowPos = new Rect(Screen.width / 2, Screen.height / 2, 100, 100);
+            }
+            //Set all the pixels to black. If you don't do this the image contains random junk.
+            for (int y = 0; y < image.height; y++) {
+                for (int x = 0; x < image.width; x++) {
+                    image.SetPixel(x, y, Color.black);
                 }
             }
-        } else {
-            //monochrome display
-            for (int y = 0; y < 256; ++y) {
-                for (int x = 0; x < 8; ++x) {
-                    Int32 pixels = mem[pointer + y * 8 + x];
-                    for (int i = 0; i < 32; ++i) {
-                        bool set = ((pixels >> i) & 1) != 0;
-                        image.SetPixel(x * 32 + i, 255 - y, set ? colors[1] : colors[0]);
+            image.Apply();
+        }
+
+        private void updateColors()
+        {
+            for (int i = 0; i < 16; ++i) {
+                int colData = mem[colorPointer + i];
+                colors[i].b = (colData & 0xff) / 255.0f;
+                colors[i].g = ((colData >> 8) & 0xff) / 255.0f;
+                colors[i].r = ((colData >> 16) & 0xff) / 255.0f;
+            }
+        }
+
+        void drawImage()
+        {
+            updateColors();
+            if ((mem[modePtr] & 1) == 0) {
+                //colour character set
+                for (int y = 0; y < 32; ++y) {
+                    for (int x = 0; x < 16; ++x) {
+                        //read four characters and all colours from text buffer
+                        //since each character+colour is 16 bit, this should net us 2 words at a time
+                        Int32 AB = mem[pointer + y * 16 + x];
+                        UInt16 A = (UInt16)(AB & 0xffff);
+                        UInt16 B = (UInt16)((AB >> 16) & 0xffff);
+                        //load the font for all characters
+                        //each character has 2 words each, so we need to read 4 total
+                        Int32 Ax = mem[charSetPtr + (A & 0xff) * 2];
+                        Int32 Ay = mem[charSetPtr + (A & 0xff) * 2 + 1];
+                        Int32 Bx = mem[charSetPtr + (B & 0xff) * 2];
+                        Int32 By = mem[charSetPtr + (B & 0xff) * 2 + 1];
+                        //render each character
+                        //problem: each character has only 8 bits/column, each font declares them as 32+32 bits.
+                        //the way around this is complicated
+                        //read 8 bits at a time...
+                        //set 8 pixels with the proper colours
+                        //jump down a row...
+                        //set 8 more colours and so on
+                        fontDraw((A >> 8) & 0xf, (A >> 12) & 0xf, Ax, Ay, 16 * x, 8 * y);
+                        fontDraw((B >> 8) & 0xf, (B >> 12) & 0xf, Bx, By, 16 * x + 8, 8 * y);
+                    }
+                }
+            } else {
+                //monochrome display
+                for (int y = 0; y < 256; ++y) {
+                    for (int x = 0; x < 8; ++x) {
+                        Int32 pixels = mem[pointer + y * 8 + x];
+                        for (int i = 0; i < 32; ++i) {
+                            bool set = ((pixels >> i) & 1) != 0;
+                            image.SetPixel(x * 32 + i, 255 - y, set ? colors[1] : colors[0]);
+                        }
                     }
                 }
             }
+            image.Apply();
         }
-        image.Apply();
-    }
 
-    //draws a single character to the screen
-    //colA and colB denotes colour, charA and charB is monochrome 8x8 tile, xpos, ypos screen destination upper left
-    private void fontDraw(Int32 colA, Int32 colB, Int32 charA, Int32 charB, int xPos, int yPos)
-    {
-        //for the first half of the character
-        for (int i = 0; i < 4; ++i) {
-            Int32 currentBits = ((charA >> (i * 8)) & 0xff);
-            for (int j = 0; j < 8; ++j) {
-                bool bit = ((currentBits << j) & 0x80) != 0;
-                image.SetPixel(xPos + j, 255 - (yPos + i), bit ? colors[colA] : colors[colB]);
+        //draws a single character to the screen
+        //colA and colB denotes colour, charA and charB is monochrome 8x8 tile, xpos, ypos screen destination upper left
+        private void fontDraw(Int32 colA, Int32 colB, Int32 charA, Int32 charB, int xPos, int yPos)
+        {
+            //for the first half of the character
+            for (int i = 0; i < 4; ++i) {
+                Int32 currentBits = ((charA >> (i * 8)) & 0xff);
+                for (int j = 0; j < 8; ++j) {
+                    bool bit = ((currentBits << j) & 0x80) != 0;
+                    image.SetPixel(xPos + j, 255 - (yPos + i), bit ? colors[colA] : colors[colB]);
+                }
+            }
+
+            //second half
+            for (int i = 0; i < 4; ++i) {
+                Int32 currentBits = ((charB >> (i * 8)) & 0xff);
+                for (int j = 0; j < 8; ++j) {
+                    bool bit = ((currentBits << j) & 0x80) != 0;
+                    image.SetPixel(xPos + j, 255 - (yPos + i + 4), bit ? colors[colA] : colors[colB]);
+                }
             }
         }
 
-        //second half
-        for (int i = 0; i < 4; ++i) {
-            Int32 currentBits = ((charB >> (i * 8)) & 0xff);
-            for (int j = 0; j < 8; ++j) {
-                bool bit = ((currentBits << j) & 0x80) != 0;
-                image.SetPixel(xPos + j, 255 - (yPos + i + 4), bit ? colors[colA] : colors[colB]);
+
+        //Now to display this we can include it in a GUI window. See the "Creating a Window GUI" example for how to bring up a window.
+        //In the window GUI code we just need this line to put our Texture2D on the screen:
+        protected void windowGUI(int windowID)
+        {
+            GUILayout.Box(image);
+            GUI.DragWindow(new Rect(0, 0, 10000, 20));
+        }
+
+        public void draw()
+        {
+            if (visible) {
+                GUI.skin = HighLogic.Skin;
+                windowPos = GUILayout.Window(2, windowPos, windowGUI, "Monitor", GUILayout.MinWidth(100));
             }
         }
-    }
 
-
-    //Now to display this we can include it in a GUI window. See the "Creating a Window GUI" example for how to bring up a window.
-    //In the window GUI code we just need this line to put our Texture2D on the screen:
-    protected void windowGUI(int windowID)
-    {
-        GUILayout.Box(image);
-        GUI.DragWindow(new Rect(0, 0, 10000, 20));
-    }
-
-    public void draw()
-    {
-        if (visible) {
-            GUI.skin = HighLogic.Skin;
-            windowPos = GUILayout.Window(2, windowPos, windowGUI, "Monitor", GUILayout.MinWidth(100));
+        public void update()
+        {
+            if (visible)
+                drawImage();
         }
-    }
 
-    public void update()
-    {
-        if(visible)
-            drawImage();
-    }
-
-    public UInt32[] getDefaultFont()
-    {
-        UInt32[] cga_8 = {
+        public UInt32[] getDefaultFont()
+        {
+            UInt32[] cga_8 = {
             0x0, 0x0,
             0x81a5817e, 0x7e8199bd,
             0xffdbff7e, 0x7effe7c3,
@@ -403,12 +405,12 @@ class Monitor
             0x3c3c0000, 0x3c3c,
             0x0, 0x0
                         };
-        return cga_8;
-    }
+            return cga_8;
+        }
 
-    public Int32[] getDefaultColors()
-    {
-        Int32[] c64Cols = {
+        public Int32[] getDefaultColors()
+        {
+            Int32[] c64Cols = {
             0x00000000,
 	        0x00ffffff,
 	        0x0068372b,
@@ -426,6 +428,7 @@ class Monitor
 	        0x006c5eb5,
 	        0x00959595
         };
-        return c64Cols;
+            return c64Cols;
+        }
     }
 }

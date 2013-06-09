@@ -29,7 +29,7 @@ resolution	256*256 pixels
 data size:	2048 words screen data
 
 Data format:
-each bita represent a pixel, 0 makes the pixel use color 0, while 1 makes it use color 1.
+each bit represents a pixel, 0 makes the pixel use color 0, while 1 makes it use color 1.
 the first word will set the first 32 bits from the upper left corner, wile successive entries will set pixels right and downwards.
 
 

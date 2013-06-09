@@ -64,6 +64,13 @@ GLOBAL_SCREEN			the screen data pointer
 GLOBAL_SCREEN_COLOR		screen color map
 GLOBAL_SCREEN_FONT		font map
 
+GLOBAL_GSB0			serial bus 0
+GLOBAL_GSB1			serial bus 1
+...
+GLOBAL_GSB7			serial bus 7
+
+
+
 Registers:
 
 r0->r15 register 0 to 15
@@ -180,7 +187,8 @@ bit	0:	enables interrupts
 	1:	enables interrupts from the timer
 	2:	enables interrupts when the flight status variables (yaw etc) are updated.
 	3:	enables interrupts when GLOBAL_NUMPAD_NEWIN != 0
-	4+:	does nothing yet
+	4:	enables interrupts from the serial buses
+	5+:	does nothing yet
 
 when an interrupt occurs pc is immidiately set to the adress stored at "GLOBAL_IADRESS".
 when the cpu jumps, interrupts are immidiately disabled.
@@ -191,7 +199,8 @@ when hardware exceptions occur, values of 256 or higher are copied into the es r
 257:	flight status variables updated (pitch, yaw etc.)
 258:	unimplemented/illegal instruction at ea-1 (unless the interrupt has been delayed, in which case the instruction could be anywhere)
 259:	input from numpad available (note: this exception will keep appearing while GLOBAL_NUMPAD_NEWIN != 0)
-260+:	not implemented yet.
+260-267:serial bus 0-7, IBF or OBE
+268+:	not implemented yet.
 
 
 Assembler:
@@ -332,7 +341,8 @@ regarding actiongroups:
 		0: 	nothing
 		1->10: 	toggle custom action group 1->10
 		11:	toggle Abort group
-		12+:	nothing, yet
+		12:	Activate next stage
+		13+:	Nothing, yet
 	the group is toggled when the memory slot is reset.
 	
 

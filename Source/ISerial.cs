@@ -3,14 +3,30 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-interface ISerial
+namespace ProgCom
 {
-    void rec_bit(bool bit);
-    void rec_sending();
-    void rec_trans_finished();
-    void rec_send_done();
-    void connect(ISerial sBus);
-    void disconnect();
-    void tick(int ticks);
-    void startSend(int send);
+    public interface ISerial
+    {
+        //called when the class should receive a bit
+        void rec_bit(bool bit);
+
+        //indicates that the connected interface has started sending data
+        void rec_sending();
+
+        //called when the connected interface has sent all data
+        void rec_send_done();
+
+        //called when you want to know if you can send to the interface
+        bool ready();
+
+        //connects to a serial interface
+        void connect(ISerial sBus);
+
+        //disconnects the module from all connected interfaces
+        void disconnect();
+
+        //called once per completed instruction
+        void tick(int ticks);
+
+    }
 }

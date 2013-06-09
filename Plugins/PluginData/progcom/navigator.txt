@@ -35,7 +35,7 @@ intHandler:
 ;lastly, it enables interrupts, as well as makes sure the timer spawns an interrupt each time it resets.
 #global main
 main:
-	movil 	r1, CPU_CLOCKRATE;max number to move for movil is 2097151
+	movil 	r1, CPU_CLOCKRATE;max number to move for movil is 2097151 CPU_CLOCKRATE wont fit in movi
 	wr	r1, r0, GLOBAL_TIMER_MAX
 	movi	r1, intHandler
 	wr	r1, r0, GLOBAL_IADRESS
