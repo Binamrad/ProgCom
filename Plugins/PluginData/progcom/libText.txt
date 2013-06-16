@@ -292,7 +292,6 @@ readStrLoop:
 	;read characters until enter is pressed.
 	;if backspace is pressed, remove one char from the stack
 	call	readChar
-	wr	r1, r0, GLOBAL_NUMPAD_OUT
 	;make sure we did not press enter
 	movi	r3, C_LF
 	beq	r3, r1, readStrEnd

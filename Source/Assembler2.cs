@@ -674,13 +674,17 @@ namespace ProgCom
             Int32[] res = new Int32[strs.Length];
             for (int i = 0; i < strs.Length; ++i) {
                 String str = strs[i];
-
-                if (defines.ContainsKey(str)) { //check if line is in defines
-                    res[i] = defines[str];
-                } else if (str.Contains(".")) { //Decimal point means we're treating this as a float
-                    res[i] = Util.ftoi(Util.parseTo<Single>(str));
-                } else {
-                    res[i] = (Int32)Util.parseTo<UInt32>(str);
+                try {
+                    if (defines.ContainsKey(str)) { //check if line is in defines
+                        res[i] = defines[str];
+                    } else if (str.Contains(".")) { //Decimal point means we're treating this as a float
+                        res[i] = Util.ftoi(Util.parseTo<Single>(str));
+                    } else {
+                        res[i] = (Int32)Util.parseTo<UInt32>(str);
+                    }
+                }
+                catch (Exception) {
+                    throw new FormatException("Not a parseable number: " + str);
                 }
             }
             return res;

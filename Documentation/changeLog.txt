@@ -2,12 +2,13 @@ v.0.8.1
 A couple of labels were not documented. They have now been added to the documentation.
 readString in libText.txt should no longer write things to the numpad output areas
 When storing text with #string, you can now use several escape characters
-strings should no longer have multiple spaces replaced by a simgle space
+strings should no longer have multiple spaces replaced by a single space
 there is a #stringw keyword that should pack one character per word instead of four. This takes more space but is easier to use.
 you can now adjuse the accuracy of the speed vectors in the same way you can adjust the position vectors.
 the movb, movbl, movhw, movhwl instructions have been added to make string handling easier
 the muli and divi instructions should state their proper execution time in opcodes.txt
 the sri and sli instructions now properly state that their third argument is a constant in opcodes.txt
+thanks to thewonderidiot, you should now be able to use hexadecimal and binary constants wherever one is required
 
 
 v.0.8
