@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Reflection;
 
 //this class contains various utility functions that are needed in several places
 namespace ProgCom
@@ -125,6 +126,53 @@ namespace ProgCom
             i -= i & (1 << bitPosition);
             i |= (bitVal << bitPosition);
             return i;
+        }
+
+        // Parse decimal, binary, or hex strings to a supplied type
+        public static T parseTo<T>(String s)
+        {
+            Type resultType = typeof(T);
+            String methodName = "To" + resultType.Name;
+            MethodInfo conversionMethod;
+            object[] arguments;
+
+            if (object.Equals(resultType, typeof(Single)) || object.Equals(resultType, typeof(Double))) {
+                // toSingle and toDouble don't have a second base argument, so we have to handle them separately
+                conversionMethod = typeof(Convert).GetMethod(methodName, new[] { typeof(String) });
+                arguments = new object[] { s };
+            }
+            else {
+                // Integral result -- determine base and pass that into the convert function
+                int numberBase = 10;
+
+                if (s.StartsWith("0x")) {
+                    numberBase = 16;
+                    s = s.Remove(0, 2);
+                }
+                else if (s.StartsWith("0b")) {
+                    numberBase = 2;
+                    s = s.Remove(0, 2);
+                }
+
+                conversionMethod = typeof(Convert).GetMethod(methodName, new[] { typeof(String), typeof(Int32) });
+                arguments = new object[] { s, numberBase };
+            }
+
+            // Invoke the conversion
+            return (T)conversionMethod.Invoke(null, arguments);
+        }
+
+        // "try" version of the above, in the spirit of Int32.TryParse
+        public static bool tryParseTo<T>(String s, out T result)
+        {
+            try {
+                result = parseTo<T>(s);
+            } catch (Exception) {
+                result = default(T);
+                return false;
+            }
+
+            return true;
         }
     }
 }

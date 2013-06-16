@@ -805,7 +805,7 @@ namespace ProgCom
                         loadWrapper(S[1]);
                     } else if (S[0].Equals("run")) {
                         UInt16 result;
-                        if (!UInt16.TryParse(S[1], out result)) {
+                        if (!Util.tryParseTo<UInt16>(S[1], out result)) {
                             consoleWrite("Couldn't parse second parameter. (too large?)");
                             break;
                         }
