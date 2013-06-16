@@ -312,7 +312,7 @@ namespace ProgCom
                         throw new FormatException("Incorrect ammount of parameters in #allocate statement: " + s);
                     } else {
                         UInt16 a;
-                        if (UInt16.TryParse(strs[1], out a)) {
+                        if (Util.tryParseTo<UInt16>(strs[1], out a)) {
                             for (int i = 0; i < a; ++i) {
                                 tmp.AddLast("0");
                             }
@@ -635,7 +635,7 @@ namespace ProgCom
 
                 //check if string is a constant
                 int res;
-                if (int.TryParse(str, out res)) {
+                if (Util.tryParseTo<Int32>(str, out res)) {
                     if (addNext) {
                         i += res;
                         addNext = false;
@@ -673,37 +673,14 @@ namespace ProgCom
             Int32[] res = new Int32[strs.Length];
             for (int i = 0; i < strs.Length; ++i) {
                 String str = strs[i];
-                //check if string is an integer
-                Int32 j;
-                if (Int32.TryParse(str, out j)) {
-                    res[i] = j;
-                    continue;
-                }
-                //check if string is a hexadecimal number
-                if (str.StartsWith("0x")) {
-                    try {
-                        unchecked { res[i] = (Int32)Convert.ToUInt32(str, 16); }
-                    }
-                    catch (FormatException) {
-                        throw new FormatException("Not a hexadecimal number: " + str);
-                    }
-                    catch (OverflowException) {
-                        throw new FormatException("Number wont fint in an Int32: " + str);
-                    }
-                    continue;
-                }
-                //check if string is a floating point number
-                float f;
-                if (float.TryParse(str, out f)) {
-                    res[i] = Util.ftoi(f);
-                    continue;
-                }
-                //check if line is in defines
-                if (defines.ContainsKey(str)) {
+
+                if (defines.ContainsKey(str)) { //check if line is in defines
                     res[i] = defines[str];
-                    continue;
+                } else if (str.Contains(".")) { //Decimal point means we're treating this as a float
+                    res[i] = Util.ftoi(Util.parseTo<Single>(str));
+                } else {
+                    res[i] = (Int32)Util.parseTo<UInt32>(str);
                 }
-                throw new FormatException("Not an integer, hexadecimal, or float value: " + s);
             }
             return res;
         }
@@ -949,7 +926,7 @@ namespace ProgCom
                 if (strs.Length != 3)
                     throw new FormatException("Invalid ammount of parameters in #define statement: " + s);
                 int a;
-                if (int.TryParse(strs[2], out a)) {
+                if (Util.tryParseTo<Int32>(strs[2], out a)) {
                     //add the stuff to defines
                     defines.Add(strs[1], a);
                 } else {
