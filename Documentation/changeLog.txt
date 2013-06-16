@@ -1,3 +1,15 @@
+v.0.8.1
+A couple of labels were not documented. They have now been added to the documentation.
+readString in libText.txt should no longer write things to the numpad output areas
+When storing text with #string, you can now use several escape characters
+strings should no longer have multiple spaces replaced by a simgle space
+there is a #stringw keyword that should pack one character per word instead of four. This takes more space but is easier to use.
+you can now adjuse the accuracy of the speed vectors in the same way you can adjust the position vectors.
+the movb, movbl, movhw, movhwl instructions have been added to make string handling easier
+the muli and divi instructions should state their proper execution time in opcodes.txt
+the sri and sli instructions now properly state that their third argument is a constant in opcodes.txt
+
+
 v.0.8
 Made it possible to activate the next stage through the actiongroup system
 there is now a keyboard for entering text with. See keyboard.txt for more info

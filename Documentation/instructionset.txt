@@ -12,7 +12,7 @@ Memory:
 
 the first 128 memory locations (0->127) are reserved for memory mapped control and navigation values.
 Most of the vectors here are in a fixed point format. The ordering of the parameters of the vectors are adress = X, adress+1 = Y, adress+2 = Z.
-the accuracy of the fixed point vectors are determined by the value at GLOBAL_VERTORACCURACY. (the behind-the-scenes conversion from the floats that the game uses to the fixed point vectors is this: (int)(vector.whatever*global_vectorAccuracy)) All speed readings use *16 rather than vectoracuracy.
+the accuracy of the fixed point vectors are determined by the value at GLOBAL_VERTORACCURACY. (the behind-the-scenes conversion from the floats that the game uses to the fixed point vectors is this: (int)(vector.whatever*global_vectorAccuracy)) All speed readings use *GLOBAL_SPEEDACCURACY rather than vectoracuracy.
 these values can be accessed at the following defined adresses:
 
 label				value	explaination
@@ -39,6 +39,7 @@ GLOBAL_NUMPAD_FORMAT		39	this adress is read to determine the format of the outp
 GLOBAL_TIMER			40	the cpu:s timer is accessible at this adress. it contains the number of cycles that has elapsed since the timer last reset. can be written to and read from as normal.
 GLOBAL_VECTORACCURACY	  	41	the accuracy for the fixed-point vectors the computer uses to represent position and rotation. defaults to 1024.
 GLOBAL_SCREEN_MODE		42	screen mode register
+GLOBAL_SPEEDACCURACY		43	accuracy for fixed-point vectors used for velocity. defaults to 16. if negative it is interpreted as (1/-GLOBAL_SPEEDACCURACY) when calculating the vectors. This is useful if you are traveling near, at or over the speed of light.
 GLOBAL_IENABLE			44	interrupt enable, see interrupts.
 GLOBAL_CLOCK			45	the computer clock. contains the complete ammount of cycles that the computer has spent turned on.
 GLOBAL_IADRESS			46	the adress the execution jumps to at interrupts, see interrupts below.
@@ -56,18 +57,23 @@ GLOBAL_RCS_FORWARD		54	RCS forward control for the ship. -1024 is minimum, 1024 
 GLOBAL_ACTIONGROUP		55	Activation of actiongroups. see Misc section at the bottom of the document.
 
 other labels:
-PROG_POS			the location the program is loaded at
-TEXT_START			the location where the non-automatically generated code starts.
-DATA_START			the location in memory where the data section of the code is located.
-DATA_END			the location in memory where the end of the data section is located.
-GLOBAL_SCREEN			the screen data pointer
-GLOBAL_SCREEN_COLOR		screen color map
-GLOBAL_SCREEN_FONT		font map
+PROG_POS			--	the location the program is loaded at
+TEXT_START			--	the location where the non-automatically generated code starts.
+DATA_START			--	the location in memory where the data section of the code is located.
+DATA_END			--	the location in memory where the end of the data section is located.
+GLOBAL_SCREEN			63488	the screen data pointer
+GLOBAL_SCREEN_COLOR		63472	screen color map
+GLOBAL_SCREEN_FONT		65024	font map
 
-GLOBAL_GSB0			serial bus 0
-GLOBAL_GSB1			serial bus 1
+GLOBAL_GSB0			64	serial bus 0
+GLOBAL_GSB1			68	serial bus 1
 ...
-GLOBAL_GSB7			serial bus 7
+GLOBAL_GSB7			92	serial bus 7
+
+non-address labels (note: you can generally assume these need the movil instruction):
+CPU_CLOCKRATE			--	clock rate for the cpu
+CPU_RAM				--	total amount of memory addresses in ram
+CPU_MAXADDRESS			--	maximum addressable location in memory
 
 
 
@@ -178,6 +184,15 @@ ftof		converts the integer at the top of the stack to a floating point number, a
 ftoi		converts the floating point number at the top of the stack to integer, and pushes on the stack
 fflush		removes all entries from the selected floating point stack and aborts all operations
 
+Extended instruction set:
+please be aware that the assembler is not good at using these instructions yet, so don't put a constant higher than 255
+in them or you will use the wrong instruction
+
+movb		MOVe Byte			replace byte C of rA with byte C of rB
+movhw		MOVe Half-Word			replace half-word C of rA with half-word C of rB
+movbl		MOV Byte Low			replace byte C of rA with byte 0 of rB
+movhwl		MOVe Half-Word Low		replace half-word C of rA with half-word 0 of rB
+
 
 Interrupts:
 
@@ -278,10 +293,22 @@ Will put number of zero - initialised integers where the #allocate statement was
 #string "<string>"
 will put the specified string into memory in ascii format using 4 chars per word. It will also add null-termination.
 the string will be read from the first " to the last ", anything else will be regarded as a comment
-tabs and/or multiple spaces will currently be replaced by single spaces.
-at the moment it is not possible to put formatting characters into the string (such as \t, \n etc.)
+the following escape sequences are supported:
+	\n	line feed
+	\a	bell
+	\t	horizontal tab
+	\0	null
+	\\	backslash
+	\"	"
+	\f	form feed
+	\r	carrige return
 the string must be spacified across a single line
 this keyword can only be placed in the .data section
+
+#stringw "<string>"
+the same as #string, except it uses one character per word instead of four characters per word.
+this makes strings easier to use, at the expense of them using more memory.
+note that the example code expects the "#string"-strings
 
 #macro <macroname> <parameters> {
 <stuff>

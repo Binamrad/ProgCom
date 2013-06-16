@@ -43,22 +43,76 @@ namespace ProgCom
         }
 
         //convert a string to 32-bit packed ascii format
-        public static Int32[] strToInt32(String s)
+        public static Int32[] strToInt32(String s, bool compactStrings)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(s);
-            Int32[] final = new Int32[(bytes.Length >> 2) + 1];
+            Int32[] final = new Int32[(compactStrings ? bytes.Length >> 2 : bytes.Length) + 1];
             int bytePosition = 0;
             int i = 0;
-            foreach (byte b in bytes) {
-                final[i] |= (b << bytePosition);
-                bytePosition += 8;
-                if (bytePosition == 32) {
-                    bytePosition = 0;
+
+            if (compactStrings) {
+                foreach (byte b in bytes) {
+                    final[i] |= (b << bytePosition);
+                    bytePosition += 8;
+                    if (bytePosition == 32) {
+                        bytePosition = 0;
+                        ++i;
+                    }
+                }
+            } else {
+                foreach (byte b in bytes) {
+                    final[i] = b;
                     ++i;
                 }
             }
             return final;
         }
+
+        //fix \n, \t etc. chars in a string to their counterparts
+        public static String fixEscapeChars(String s)
+        {
+            String finalStr = "";//this is lazy, but I'm not really worried about quadratic complexity in this case
+            bool prevEsc = false;
+            foreach (char c in s) {
+                if(c == '\\' && prevEsc == false) {
+                    prevEsc = true;
+                } else if (prevEsc == true) {
+                    prevEsc = false;
+                    switch (c) {
+                        case 'n':
+                            finalStr += '\n';
+                            break;
+                        case 'a':
+                            finalStr += '\a';
+                            break;
+                        case 't':
+                            finalStr += '\t';
+                            break;
+                        case '0':
+                            finalStr += '\0';
+                            break;
+                        case '\\':
+                            finalStr += '\\';
+                            break;
+                        case '\"':
+                            finalStr += '\"';
+                            break;
+                        case 'f':
+                            finalStr += '\f';
+                            break;
+                        case 'r':
+                            finalStr += '\r';
+                            break;
+                        default:
+                            throw new FormatException("Unrecognized escape sequence: \"\\" + c + "\" in: " + s);
+                    }
+                } else {
+                    finalStr += c;
+                }
+            }
+            return finalStr;
+        }
+
 
         //set the specified bit to value
         public static int setBit(Int32 i, int bitPosition, bool bitVal)

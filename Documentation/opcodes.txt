@@ -10,6 +10,11 @@ the floating point unit operations are structured like this:
 |XXXXXX|XXXXX|XXXXXXXXXXXXXXXXX|XXXX|
  instr. rA    unused		opcode extension
 
+the extended instructions are structured like this
+ 6bits  5bits 5bits 8bits    8bits
+|XXXXXX|XXXXX|XXXXX|XXXXXXXX|XXXXXXXX|
+ instr. rA    rB    op. ext. const/rC
+
 instruction name:	the name of the instruction as it is used in assembly code
 cycles:			the number of cycles the cpu need to execute the instruction
 rA:			an arbitrary register
@@ -37,8 +42,8 @@ opcode		addr. field	instruction name	cycles	rA	rB	address/const/rC	pc-relative
 0x07		--		not			1	no	no	rC
 0x08		--		addi			1	yes	yes	const
 0x09		--		subi			1	yes	yes	const
-0x0a		--		muli			1	yes	yes	const
-0x0b		--		divi			1	yes	yes	const
+0x0a		--		muli			10	yes	yes	const
+0x0b		--		divi			40	yes	yes	const
 0x0c		--		andi			1	yes	yes	const
 0x0d		--		ori			1	yes	yes	const
 0x0e		--		xori			1	yes	yes	const
@@ -68,12 +73,15 @@ opcode		addr. field	instruction name	cycles	rA	rB	address/const/rC	pc-relative
 0x16		--		--			--	--	--	--
 0x17		--		cmp			1	yes	yes	rC
 0x18		--		--			--	--	--	--
-0x19		--		sri			1	yes	yes	rC
-0x1a		--		sli			1	yes	yes	rC
+0x19		--		sri			1	yes	yes	const
+0x1a		--		sli			1	yes	yes	const
 0x1b		--		--			--	--	--	--
 0x1c		--		--			--	--	--	--
 0x1d		--		--			--	--	--	--
-0x1e		--		--			--	--	--	--
+0x1e		0x0800		movb			1	yes	yes	const
+0x1e		0x0900		movhw			1	yes	yes	const
+0x1e		0x0a00		movbl			1	yes	yes	const
+0x1e		0x0b00		movhwl			1	yes	yes	const
 0x1f		--		--			--	--	--	--
 
 0x20		--		brr			2	no	no	rC			yes
@@ -119,7 +127,7 @@ opcode		addr. field	instruction name	cycles	rA	rB	address/const/rC	pc-relative
 *	all branch instructions take two cycles if the branch is taken, one if it isn't
 **	all read/write instructions take one cycle if the memory location is cached, 17 otherwise (9 + row size (8) ). These are also the ammount of cycles it takes to load an instruction.
 ***	The CPU always take 1 cycle to execute the instructions except for when using fpush and fpop, when it has to wait for the FPU to finish operations.
-****	Both stacks have to complete their operations before this instruction can execute. Thus, after this instruction has run, both stacks will be busy for max(floatStack0BusyCycles,floatStack1BusyCycles) +2
+****	Both stacks have to complete their operations before this instruction can execute. Thus, after this instruction has run, both stacks will be busy for max(floatStack0BusyCycles,floatStack1BusyCycles) +2 cycles
 
 
 

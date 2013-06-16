@@ -124,7 +124,12 @@ namespace ProgCom
             Instr.Add("fpush1", new Instruction(0x15, false, false, false, false, false, false, false, false, 13));
             Instr.Add("fpushn1", new Instruction(0x15, false, false, false, false, false, false, false, false, 14));
             Instr.Add("fpushpi", new Instruction(0x15, false, false, false, false, false, false, false, false, 15));
-            //0x16 extnd
+            //0x16 extended instruction set, register instructions
+            //Instr.Add("nop", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0000));
+            //Instr.Add("movbr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0800));
+            //Instr.Add("movhwr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0900));
+            //Instr.Add("movblr", new Instruction(0x1e6 true, true, true, false, false, false, false, false, 0x0a00));
+            //Instr.Add("movhwlr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0b00));
             Instr.Add("cmp", new Instruction(0x17, true, true, true, false, false, false, false, false, 0));
             //0x18 flcmpi
             Instr.Add("sri", new Instruction(0x19, true, true, false, true, false, false, false, false, 0));
@@ -132,7 +137,12 @@ namespace ProgCom
             //0x1b axi
             //0x1c sxi
             //0x1d --
-            //0x1e --
+            //0x1e extended instruction set, immediate instructions
+            //Instr.Add("nop", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0000));
+            Instr.Add("movb", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0800));
+            Instr.Add("movhw", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0900));
+            Instr.Add("movbl", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0a00));
+            Instr.Add("movhwl", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0b00));
             //0x1f cmpi
 
             /****************************************************************************************/
@@ -346,7 +356,7 @@ namespace ProgCom
                         }
                         break;
                     case 6://Extnd
-                        tmp = extndInst(address);
+                        tmp = extndInst(address, (Int32)regA, (Int32)regB, (Int32)regC, valA, valB, valC, immed != 0);
                         if (tmp == -1) {
                             return tmp;
                         } else {
@@ -595,12 +605,39 @@ namespace ProgCom
             return returnCycles;
         }
 
-        private int extndInst(int i)
+        private int extndInst(int address, int regA, int regB, int regC, int valA, int valB, int valC, bool immed)
         {
-            if (enabledInterrupts()) {
-                interruptsPending.Enqueue(258);
-            } else return -1;
-            return 0;
+            int inst = address >> 8;
+            if (immed) {
+                valC = valC & 255;
+            }
+            int extraExecTime = 0;
+            switch (inst) {
+                case 0://true nop
+                    break;
+                case 8://movb
+                    valA ^= (valA & (255 << (8 * (valC & 3))));
+                    register[regA] = valA | (valB & (255 << (8 * (valC & 3))));
+                    break;
+                case 9://movhw
+                    valA ^= (valA & (65535 << (16 * (valC & 1))));
+                    register[regA] = valA | (valB & (65535 << (16 * (valC & 1))));
+                    break;
+                case 10://movbl
+                    valA ^= (valA & (255 << (8 * (valC & 3))));
+                    register[regA] = valA | ((valB & 255) << (8 * (valC & 3)));
+                    break;
+                case 11://movhwl
+                    valA ^= (valA & (65535 << (16 * (valC & 1))));
+                    register[regA] = valA | ((valB & 65535) << (16 * (valC & 1)));
+                    break;
+                default:
+                    if (enabledInterrupts()) {
+                        interruptsPending.Enqueue(258);
+                        return 0;
+                    } else return -1;
+            }
+            return extraExecTime;
         }
 
         //Interrupts are handled here

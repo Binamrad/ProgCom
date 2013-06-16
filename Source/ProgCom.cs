@@ -88,7 +88,8 @@ namespace ProgCom
             */
             Int32[] mem = CPU.Memory;
             int accuracy = mem[41];//vector accuracy
-            int speedAccuracy = 16;//speed accuracy
+            float speedAccuracy = mem[43] >= 0 ? (float)mem[43] : 1.0f/((float)-mem[43]);//speed accuracy
+            //int speedAccuracy = 16;//old speedaccuracy model
 
             mem[4] = (Int32)(eastUnit.x * accuracy);
             mem[5] = (Int32)(eastUnit.y * accuracy);
@@ -355,6 +356,7 @@ namespace ProgCom
             running = false;
             //init default values in memory
             CPU.Memory[41] = 1024;//init vector precision
+            CPU.Memory[43] = 16;//default speed precision
             int i = 65024;
             foreach (UInt32 font in monitor.getDefaultFont()) {
                 CPU.Memory[i] = (Int32)font;
@@ -391,7 +393,7 @@ namespace ProgCom
             assembler.bindGlobalCall("GLOBAL_TIMER", 40);
             assembler.bindGlobalCall("GLOBAL_VECTORACCURACY", 41);
             assembler.bindGlobalCall("GLOBAL_SCREEN_MODE", 42);
-            //assembler.bindGlobalCall("GLOBAL_PROGRAMOFFSET", 43);
+            assembler.bindGlobalCall("GLOBAL_SPEEDACCURACY", 43);
             assembler.bindGlobalCall("GLOBAL_IENABLE", 44);
             assembler.bindGlobalCall("GLOBAL_CLOCK", 45);
             assembler.bindGlobalCall("GLOBAL_IADRESS", 46);

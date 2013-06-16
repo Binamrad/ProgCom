@@ -320,10 +320,19 @@ namespace ProgCom
                             throw new FormatException("Not A Number or too large/small in: " + s);
                         }
                     }
+                } else if (s.StartsWith("#stringw")) {
+                    String convert = s.Substring(s.IndexOf("\"") + 1);
+                    convert = convert.Substring(0, convert.LastIndexOf("\""));
+                    convert = Util.fixEscapeChars(convert);
+                    Int32[] stringInts = Util.strToInt32(convert, false);
+                    foreach (Int32 i in stringInts) {
+                        tmp.AddLast(i.ToString());
+                    }
                 } else if (s.StartsWith("#string")) {
                     String convert = s.Substring(s.IndexOf("\"") + 1);
                     convert = convert.Substring(0, convert.LastIndexOf("\""));
-                    Int32[] stringInts = Util.strToInt32(convert);
+                    convert = Util.fixEscapeChars(convert);
+                    Int32[] stringInts = Util.strToInt32(convert, true);//this is a bit of a hack, but w/e
                     foreach (Int32 i in stringInts) {
                         tmp.AddLast(i.ToString());
                     }
@@ -400,14 +409,6 @@ namespace ProgCom
                 retArr = new Int32[i];
                 i = 0;
             }
-            //TODO:
-            //add resolve function for the third parameter <- DONE!
-            //copy old code here for the rest of this function. It should do alright with some modifications.
-            //do a quick resolve afterwards for all the data information.<- done?
-            //data can contain: hexadecimal values <- yes
-            //integers <- si
-            //floating point data <-ja
-            //labels <- nah. Will do that later
 
             UInt16 currentInstruction = 0;
             foreach (String line in f.inst) {
@@ -484,7 +485,7 @@ namespace ProgCom
             }
             if (inst.Address) {
                 try {
-                    adress = evaluateLabel(words[wordNum], inst.mustRel, inst.mustAbs, PIC, lineLocation, labels);
+                    adress |= evaluateLabel(words[wordNum], inst.mustRel, inst.mustAbs, PIC, lineLocation, labels);//i changed = to |= here, if something broke, change back
                 }
                 catch (FormatException E) {
                     throw E;//just let these exceptions pass
@@ -494,7 +495,7 @@ namespace ProgCom
                 }
             } else if (inst.regC) {
                 if (registers.ContainsKey(words[wordNum])) {
-                    adress = registers[words[wordNum]];
+                    adress |= registers[words[wordNum]];
                 } else {
                     throw new FormatException("Not a register: " + words[wordNum] + " in: " + s);
                 }
@@ -825,23 +826,28 @@ namespace ProgCom
         //removes comments and unnesecary whitespace
         private String performCulling(String s)
         {
+            //remove all comments
+            s = Util.cutStrAfter(s, ";");
+
+            //remove leading and trailing whitespace
+            s = s.Trim();
+
+            //now we can check if the line is a string
+            if (s.StartsWith("#string")) {
+                return s;//this should work
+            }
+
             //make sure + and - have spaced around them
             s = s.Replace("+", " + ");
             s = s.Replace("-", " - ");
-
-            //remove all comments
-            s = Util.cutStrAfter(s, ";");
 
             //cut unneccesary whitespace
             Regex r = new Regex("\\s+");
             s = r.Replace(s, " ");
 
-            //remove leading and trailing whitespace
-            s = s.Trim();
-
             //make sure the user has not been silly and put a space before %
             s = s.Replace(" %", "%");
-
+            
             return s;
         }
         //splits the file into an object containing all three different fields of the text 
