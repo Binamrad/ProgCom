@@ -1,0 +1,77 @@
+;author: Binamrad
+;This program will draw the sierpinsky triangle on the display
+;it requires libExtnd from the example code
+.text
+#include libExtnd.txt
+#global main
+main:
+	;set screen mode to B
+	movi	r1, 1
+	wr	r1, r0, GLOBAL_SCREEN_MODE
+	movi	a4, 256
+	movi	a5, 0
+	movi	a6, 0
+
+fill_screen:
+	mov	r1, a5
+	mov	r2, a6
+	movi	r3, 1
+	call	putPixel
+	addi	a5, a5, 1
+	bl	a5, a4, fill_screen
+	movi	a5, 0
+	addi	a6, a6, 1
+	bl	a6, a4, fill_screen
+
+	movi	a5, 0
+	movi	a6, 0
+
+sierpski:
+	mov	r1, a5
+	mov	r2, a6
+	and	r3, a5, a6
+	bi	r3, 1
+	call	putPixel
+	addi	a5, a5, 1
+	bl	a5, a4, sierpski
+	movi	a5, 0
+	addi	a6, a6, 1
+	bl	a6, a4, sierpski
+
+	halt
+
+
+
+;uses r1 and r2 as pointers, r3 contains the color (0 is color 0, everything else is 1)
+putPixel:
+	;r1 is row pointer
+	sri	r4, r1, 5
+	sli	r2, r2, 3
+	add	r2, r2, r4
+	rd	r4, r2, GLOBAL_SCREEN
+	andi	r1, r1, 31
+	
+	;r4 contains screen data,
+	;r2 contains mem pointer
+	;r1 contains bit to set
+	;r3 contains color
+	
+
+	;remove selected bit from destination
+	movi	r5, 1
+	shl	r5, r5, r1
+	not	r5
+	and	r4, r4, r5
+	
+	;read correct bit into r5
+	bi	r3, 2
+	movi	r5, 0
+	br	setColor
+	movi	r5, 1
+	shl	r5, r5, r1
+	;set the color and write back
+	setColor:
+	add	r4, r4, r5
+	wr	r4, r2, GLOBAL_SCREEN
+	ret
+	
