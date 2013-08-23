@@ -24,6 +24,7 @@ namespace ProgCom
         int fss;//floating stack selected
         float[,] floatStack;//create a 2x4 array, one for each stack
 
+
         /****************** Startup code goes here ******************************/
 
         public CPUem()
@@ -39,7 +40,7 @@ namespace ProgCom
         private void init()
         {
             //initialise cpu-emulator
-            pc = 64;//is this really right?
+            pc = 96;//is this really right?
             memory = new MemoryModule();
             floatStack = new float[2, 4];
             fss = 0;
@@ -207,7 +208,6 @@ namespace ProgCom
         public UInt16 PC
         {
             get { return pc; }
-            set { pc = value; }
         }
         public Int32 getEX()
         {
@@ -219,7 +219,7 @@ namespace ProgCom
         }
         public void spawnException(int i)
         {
-            if (enabledInterrupts()) {
+            if (interruptsPending.Count < 256 && !interruptsPending.Contains(i)) {
                 interruptsPending.Enqueue(i);
             }
         }
@@ -295,12 +295,8 @@ namespace ProgCom
                         break;
                     case 3://Div
                         if (valC == 0) {
-                            if (enabledInterrupts()) {
-                                //illegalInstructionInterrupt
-                                interruptsPending.Enqueue(258);
-                            } else {
-                                return -1;
-                            }
+                            //illegalInstructionInterrupt
+                            interruptsPending.Enqueue(258);
                             break;
                         }
                         register[regA] = valB / valC;
@@ -335,11 +331,19 @@ namespace ProgCom
                         break;
                     case 1://Sr
                         register[regA] = (Int32)((UInt32)valB >> (valC & 0x1f));//logical right shift
-                        EX = valB << 32 - (valC & 0x1f);
+                        if (valC != 0) {
+                            EX = valB << 32 - (valC & 0x1f);
+                        } else {
+                            EX = 0;
+                        }
                         break;
                     case 2://Sl
                         register[regA] = valB << (valC & 0x3f);
-                        EX = (Int32)((UInt32)valB >> (32 - valC & 0x3f));//logical right shift
+                        if (valC != 0) {
+                            EX = (Int32)((UInt32)valB >> (32 - valC & 0x3f));//logical right shift
+                        } else {
+                            EX = 0;
+                        }
                         break;
                     case 3://Ax
                         register[regA] = valC + EX;
@@ -447,7 +451,7 @@ namespace ProgCom
                     case 3://Wr
                         //This is a bit of a hack, but it is the easiest way to implement sending over the serial bus
                         tmp = (UInt16)((valB + valC) & 0x0000ffff);
-                        if (tmp >= 64 && tmp < 64 + 8 * 4) {
+                        if (tmp >= 64 && tmp < 64 + 8 * 4 && (tmp & 3) == 2) {
                             serials[(tmp - 64) >> 2].startSend();
                         }
                         executionTime += memory.writeMem(valA, (UInt16)tmp) - 1;
@@ -466,9 +470,7 @@ namespace ProgCom
                         executionTime += exTimeTMP - 1;
                         break;
                     case 7://Int
-                        if (enabledInterrupts()) {
-                            interruptsPending.Enqueue(valC);
-                        }
+                        spawnException(valC);
                         executionTime += 1;
                         break;
 
@@ -597,9 +599,7 @@ namespace ProgCom
                     fsbc[fss] += 1;
                     break;
                 default:
-                    if (enabledInterrupts()) {
-                        interruptsPending.Enqueue(258);
-                    } else return -1;
+                    spawnException(258);
                     break;
             }
             return returnCycles;
@@ -631,11 +631,9 @@ namespace ProgCom
                     valA ^= (valA & (65535 << (16 * (valC & 1))));
                     register[regA] = valA | ((valB & 65535) << (16 * (valC & 1)));
                     break;
-                default:
-                    if (enabledInterrupts()) {
-                        interruptsPending.Enqueue(258);
-                        return 0;
-                    } else return -1;
+                default://toAdd: replace value 
+                    spawnException(258);
+                    return 0;
             }
             return extraExecTime;
         }
@@ -680,19 +678,19 @@ namespace ProgCom
 
             //see if the timer should be reset, and if so, if an exception should be raised
             if (Memory[40] >= Memory[47] && Memory[47] != 0) {
-                if (enabledInterrupts() && (Memory[44] & 2) != 0) {
-                    interruptsPending.Enqueue(256);//change this to something reasonable
+                if ((Memory[44] & 2) != 0) {
+                    spawnException(256);
                 }
                 Memory[40] = 0;
             }
 
             //check all of the serial interfaces
-            if (enabledInterrupts() && (Memory[44] & 16) != 0) {
+            if ((Memory[44] & 16) != 0) {
                 for (int i = 0; i < 8; ++i) {
                     int seriaLocation = 64 + (i << 2);
                     if ((memory.Memory[seriaLocation] & 1) != 0) {
                         if((memory.Memory[seriaLocation] & 2) != 0 || (memory.Memory[seriaLocation] & 4) != 0) {
-                            interruptsPending.Enqueue(260 + i);
+                            spawnException(260 + i);
                         }
                     }
                 }
@@ -709,7 +707,7 @@ namespace ProgCom
             Memory[44] -= Memory[44] & 1;
         }
         //terutns true if interrupts are enabled
-        public bool enabledInterrupts()
+        private bool enabledInterrupts()
         {
             return (Memory[44] & 1) != 0;
         }

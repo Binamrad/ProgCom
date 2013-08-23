@@ -15,9 +15,11 @@ namespace ProgCom
         int lastSent = 0;//here to make sure we don't send an infinite flood of characters to the cpu
         public bool visible = false;
         LinkedList<int> buttonsDown;
+        protected int windowID;
 
         public Keyboard()
         {
+            windowID = Util.random();
             windowPos = new Rect(Screen.width / 2, Screen.height / 2, 100, 100);
             buttonsDown = new LinkedList<int>();
         }
@@ -106,7 +108,7 @@ namespace ProgCom
         {
             if (visible) {
                 GUI.skin = HighLogic.Skin;
-                windowPos = GUILayout.Window(3, windowPos, guiFunction, "Keyboard", GUILayout.MinWidth(100));
+                windowPos = GUILayout.Window(windowID, windowPos, guiFunction, "Keyboard", GUILayout.MinWidth(100));
             }
         }
     }

@@ -8,19 +8,39 @@ namespace ProgCom
 {
     //a basic programmable computer, for creating control programmes for KSP vehicles
     //runs a simulated version of an imaginary processor.
-    public class ProgCom : Part
+    /*
+     * TODO:
+     * rethink how program loading should be done <- boot from tape. Fix if complaints
+     * insert boot sequence upon init <- done
+     * insert assembled program into tape <- done
+     * #literal <- done?
+     * fix bit-shift EX zero if shifted 0, full to-EX copy otherwise <- done
+     * add possibility to specify load location for programs when assembled <- done
+     * Finally update to goddamn partModule so that we can add the mod normally
+     * link to 0.21.1
+     * rle-compress tapes
+     * overhaul cache memory <- postpone
+     * add additional instructions; additional partial moves and cache bypass <-postpone
+     * fix window ids <- done?
+     * improve interrupts <- done
+     * make sure TapeDrive respects canread/canwrite flags <- done
+     * text offset registers <- postpone
+     * documentation
+     */
+    public class ProgCom : PartModule, ISerialConnector
     {
         private CPUem CPU;
-        int lastLoaded = 128;//the earliest memory sequence anything can be safely loaded to
-        bool controlling = false;
+        //int lastLoaded = 128;//the earliest memory sequence anything can be safely loaded to
+        private bool controlling = false;
         bool ttlControl = false;
-        bool running = false;
+        private bool running = false;
         Assembler2 assembler;
         private bool partGUI = false;
         private bool partActive = false;
         Monitor monitor;
         bool debug;
         Keyboard keyb;
+        TapeDrive tapeDrive;
 
         /************************************************************************************************************************/
         //helper functions
@@ -28,10 +48,12 @@ namespace ProgCom
         private bool shipHasOtherActiveComputer()
         {
             foreach (Part p in this.vessel.Parts) {
-                if (p is ProgCom) {
-                    if (((ProgCom)p).partActive && p != this) {
-                        return true;
-                    }
+               foreach(PartModule pm in p.Modules) {
+                   if (pm is ProgCom) {
+                       if (((ProgCom)pm).partActive && p != this) {
+                           return true;
+                       }
+                   }
                 }
             }
             return false;
@@ -150,11 +172,12 @@ namespace ProgCom
         private int cycle(int cycles)
         {
             int ticksElapsed = 0;
-
             while (ticksElapsed < cycles) {
                 //debugging tools
                 if (debug) {
                     print("PC: " + CPU.PC + "current instruction: " + CPU.Memory[CPU.PC] + " ra: " + CPU.Registers[15] + " sp: " + CPU.Registers[14] + ", " + CPU.Memory[(UInt16)(CPU.Registers[14] - 1)]);
+                    print(tapeDrive.getStatus());
+                    print("r1: " + CPU.Registers[1]);
                 }
                 //print("PC: " + CPU.PC + "current instruction: " + CPU.Memory[CPU.PC] + " EX: " + CPU.getEX());
                 int cyclesElapsed = CPU.tick();
@@ -174,8 +197,44 @@ namespace ProgCom
             return ticksElapsed;
         }
 
-        private int load(String s)//needs rewrite
+        private Int32[] loadAndMakeTape(String s, int loadLocation)
         {
+            Int32[] code = assembler.assemble(s, loadLocation);
+            Int32[] newCode = new Int32[1024 * 256];
+            newCode[1] = 4711;
+            int j = 0;
+            foreach (Int32 i in code) {
+                newCode[j + 3] = i;
+                ++j;
+            }
+            return newCode;
+        }
+
+        private int load(String s, bool loadTape, int loadLocation)
+        {
+            //what should I put into this iinterface?
+            //we need to be able to do the following with programs:
+            //1:    read assembly code, assemble it, and put the result in the tape drive <- this file
+            //2:    read assembly code, assemble it, and save the tape with a filename
+            //3:    
+
+            consoleWrite("Loading file: \"" + s + "\"...");
+            //assemble a program
+            Int32[] tape = loadAndMakeTape(s, loadLocation);
+            consoleWrite("Program assembled!");
+            //load program into memory
+            if (loadTape) {
+                tapeDrive.insertMedia(tape);
+                consoleWrite("Tape inserted.");
+            } else {
+                //write to a file
+                tapeDrive.saveTape(Util.cutStrAfter(s, ".") + ".pct", tape);
+                consoleWrite("Tape created.");
+            }
+
+            consoleWrite("Done");
+            return 0;
+            /*
             consoleWrite("Loading file: \"" + s + "\"...");
             //assemble a program
             Int32[] newCode = assembler.assemble(s, lastLoaded);
@@ -195,12 +254,13 @@ namespace ProgCom
 
             consoleWrite("Done");
             return loadLocation;
+             * */
         }
 
-        protected int loadWrapper(String s)
+        protected int loadWrapper(String s, bool loadTape, int loadLocation)
         {
             try {
-                return load(s);
+                return load(s, loadTape, loadLocation);
             }
             catch (FormatException f) {
                 print(f.Message);
@@ -220,7 +280,6 @@ namespace ProgCom
 
         protected void activateActionGroup(int i)
         {
-            //TODO: 12 should toggle the next stage
             ActionGroupList a = this.vessel.ActionGroups;
             switch (i) {
                 case 1:
@@ -272,10 +331,11 @@ namespace ProgCom
         protected Rect consolePos;
         protected Rect numpadPos;
 
-        protected override void onFlightStart()
+        protected void onFlightStart()
         {
             //called at load at launchpad
             if (!shipHasOtherActiveComputer()) {
+                print("ProgCom initialised!");
                 partActive = true;
                 vessel.OnFlyByWire += new FlightInputCallback(performManouvers);
                 //add the gui iff the vessel is the active vessel.
@@ -287,7 +347,8 @@ namespace ProgCom
                 }
             }
         }
-
+        /*
+         * are these really not needed anymore?
         protected override void onPartDestroy()
         {
             if (partActive) {
@@ -312,7 +373,7 @@ namespace ProgCom
                 RenderingManager.RemoveFromPostDrawQueue(3, new Callback(keyb.draw));//start the keyboard
             }
         }
-
+        */
         private void removeExternalGUI()
         {
             if (partActive) {
@@ -341,16 +402,27 @@ namespace ProgCom
         private void init()
         {
             //initialise cpu-emulator
-            lastLoaded = 128;
+            //lastLoaded = 128;
             CPU = new CPUem();
 
+            windowID = Util.random();
             removeExternalGUI();
             monitor = new Monitor(CPU.Memory, 63488, 65024, 63472, 42);
             keyb = new Keyboard();
             initExternalGUI();
 
+            if (tapeDrive == null) {
+                tapeDrive = new TapeDrive(CPU.ClockRate);
+                //insert a blank tape
+                Int32[] media = new Int32[256 * 1024];
+                media[1] = 4711;
+                tapeDrive.insertMedia(media);
+            }
+
             //connect keyboard to serial port
             connect(keyb, 1);
+            //connect tapedrive to serial port
+            connect(tapeDrive, 0);
 
             
             running = false;
@@ -367,6 +439,45 @@ namespace ProgCom
                 CPU.Memory[i] = col;
                 ++i;
             }
+            //boot loader
+            Int32[] bootldr = {
+                                  -1073741824,
+                                  -1073741824,
+                                  -532676599,
+                                  -1207959536,
+                                  -1207959531,
+                                  -1608450052,
+                                  -532675839,
+                                  -1207959540,
+                                  -532671486,
+                                  -1207959542,
+                                  608174100,
+                                  -1207959538,
+                                  -1541406717,
+                                  -532676605,
+                                  -1207959547,
+                                  -1610547214,
+                                  -333315948,
+                                  541196289,
+                                  -1405026312,
+                                  -1610612724,
+                                  -400555968,
+                                  807469096,
+                                  606142496,
+                                  -1543372804,
+                                  -331349950,
+                                  -2013265905,
+                                  -400555968,
+                                  807469060,
+                                  -1608450051,
+                                  -400555967,
+                                  -335544256,
+                                  -2013265905
+                              };
+            for (int ldr = 0; ldr < bootldr.Length; ++ldr) {
+                CPU.Memory[ldr + 96] = bootldr[ldr];
+            }
+
 
             //initialise the assembler
             assembler = CPU.getCompatibleAssembler();
@@ -433,9 +544,11 @@ namespace ProgCom
         }
 
         //rect initialized here
-        protected override void onPartStart()
+        public override void OnStart(PartModule.StartState state)
         {
-            base.onPartStart();
+            base.OnStart(state);
+            if(state.Equals(PartModule.StartState.Editor)) return;//don't start anything in the editor
+            print("initialising progCom..."+state.ToString());
             if ((windowPos.x == 0) && (windowPos.y == 0))//windowPos is used to position the GUI window, lets set it in the center of the screen
             {
                 windowPos = new Rect(Screen.width / 2, Screen.height / 2, 100, 100);
@@ -443,7 +556,7 @@ namespace ProgCom
             init();
             //vessel.OnFlyByWire += new FlightInputCallback(performManouvers);
             //RenderingManager.AddToPostDrawQueue(3, new Callback(drawGUI));//start the GUI
-
+            onFlightStart();
             print("Hello, World!");
             consoleWrite("Computer online!");
         }
@@ -528,12 +641,11 @@ namespace ProgCom
             }
         }
 
-
         private int cyclesPending = 0;
         //perform CPU cycling and the like here
-        protected override void onPartUpdate()
+        public override void OnUpdate()
         {
-            base.onPartUpdate();
+            base.OnUpdate();
 
             //we must make sure that, if the vessel is gains or loses focus, that the gui responds accordingly
             if (partGUI == true && !vessel.isActiveVessel) {
@@ -570,7 +682,7 @@ namespace ProgCom
                     CPU.spawnException(259);
                 }
                 float time = UnityEngine.Time.deltaTime;
-                cyclesPending += (int)(time * (debug ? 120 : CPU.ClockRate));
+                cyclesPending += debug ? 1 : (int)(time * CPU.ClockRate);
                 if (cyclesPending > CPU.ClockRate) {
                     cyclesPending = CPU.ClockRate;//to prevent lockup bugs due to ever-esclalating clock-cycles per update
                 }
@@ -587,6 +699,7 @@ namespace ProgCom
         String currentText = "";
         int consoleMax = -1;
         String[] consoleText = new String[16];
+        int windowID;
         //handles how the window looks
         private void WindowGUI(int windowID)
         {
@@ -774,7 +887,7 @@ namespace ProgCom
         protected void drawGUI()
         {
             GUI.skin = HighLogic.Skin;
-            windowPos = GUILayout.Window(1, windowPos, WindowGUI, "Computer Control Panel", GUILayout.MinWidth(100));
+            windowPos = GUILayout.Window(windowID, windowPos, WindowGUI, "Computer Control Panel", GUILayout.MinWidth(100));
         }
 
         private String memWrFormat(int i, int pos)
@@ -786,42 +899,60 @@ namespace ProgCom
 
         private void parseInput(String s)
         {
+            UInt16 tmp;
             String[] S = s.Split(' ');
-            int tmp;
             switch (S.Length) {
                 case 1:
                     if (S[0].Equals("clear")) {
                         clearConsole();
-                    } else if (S[0].Equals("print")) {
-                        for (int i = 0; i < 100; ++i) {
-                            print(CPU.Memory[i]);
-                        }
+                    } else if (S[0].Equals("step")) {
+                        cycle(1);
                     } else if (S[0].Equals("debug")) {
                         debug = !debug;
                     } else consoleWrite("Couldn't parse");
                     break;
                 case 2:
                     if (S[0].Equals("load")) {
-                        loadWrapper(S[1]);
-                    } else if (S[0].Equals("run")) {
-                        UInt16 result;
-                        if (!Util.tryParseTo<UInt16>(S[1], out result)) {
-                            consoleWrite("Couldn't parse second parameter. (too large?)");
-                            break;
+                        loadWrapper(S[1], true, 128);
+                    } else if(S[0].Equals("insert")) {
+                        if(S[1].Equals("empty")) {
+                            Int32[] media = new Int32[1024 * 256];
+                            media[1] = 4711;
+                            tapeDrive.insertMedia(media);
+                        } else if(S[1].Contains('.')) {
+                            tapeDrive.insertMedia(tapeDrive.loadTape(S[1]));
                         }
-                        CPU.PC = result;
+                    } else if(S[0].Equals("asm")) {
+                        loadWrapper(S[1], false, 128);
+                    } else if (S[0].Equals("print")) {
+                        if (Util.tryParseTo<UInt16>(S[1], out tmp)) {
+                            for (int i = 0; i < 100; ++i) {
+                                print(CPU.Memory[i + tmp]);
+                            }
+                        } else {
+                            consoleWrite("not an address: " + S[1]);
+                        }
                     } else consoleWrite("Couldn't parse");
                     break;
                 case 3:
-                    if (S[0].Equals("load")) {//load the program in the second or third parameter
-
-                        if (S[1].Equals("run")) {
-                            tmp = loadWrapper(S[2]);
-                            if (tmp >= 0) {
-                                CPU.PC = (UInt16)tmp;
+                    if(S[0].Equals("insert")) {
+                        if(S[1].Equals("asm")) {
+                            //assemble some code and then stuff
+                            loadWrapper(S[2], true, 128);
+                        }
+                    } else consoleWrite("Couldn't parse.");
+                    break;
+                case 4:
+                    if(S[0].Equals("insert")) {
+                        if(S[1].Equals("asm")) {
+                            if (Util.tryParseTo<UInt16>(S[3], out tmp)) {
+                                //assemble some code and then stuff
+                                loadWrapper(S[2], true, tmp);
+                            } else {
+                                consoleWrite("Not A Number: " + S[3]);
                             }
-                        } else consoleWrite("Couldn't parse.");
-                    }
+                        }
+                    } else consoleWrite("Couldn't parse.");
                     break;
 
             }

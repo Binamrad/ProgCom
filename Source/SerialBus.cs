@@ -10,6 +10,8 @@ namespace ProgCom
         ISerial connected;
         UInt16 memPointer;
         Int32 currentBit;
+        bool sending = false;
+        bool receiving = false;
 
         //TODO:
         //make interact with memory, sending/receiving bits etc.
@@ -30,23 +32,19 @@ namespace ProgCom
             localMemRef = mem;
             connected = null;
         }
-
         public void rec_bit(bool bit)
         {
             localMemRef[memPointer + 1] = ((Int32)(((UInt32)localMemRef[memPointer + 1]) >> 1) + ((bit ? 1 : 0) << 31));
         }
         public void rec_sending()
         {
-            //set bit 4 to 1
-            localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 4, 1);
+            receiving = true;
         }
         public void rec_send_done()
         {
-            //set bit 4 to 0
-            localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 4, 0);
+            receiving = false;
             //set bit 2 to 1
             localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 2, 1);
-
         }
         public bool ready()
         {
@@ -68,9 +66,8 @@ namespace ProgCom
         {
             currentBit = 0;
             if (connected != null) {
+                sending = true;
                 connected.rec_sending();
-                // set bit 3 to 1
-                localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 3, 1);
             }
         }
         public void tick(int ticks)
@@ -79,30 +76,33 @@ namespace ProgCom
                 return;
             for (int i = 0; i < ticks && isSending(); ++i) {
                 if (currentBit == 32) {
-                    currentBit = 0;
                     connected.rec_send_done();
-                    //set bit 3 to 0
-                    localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 3, 0);
                     //set bit 1 t0 1
                     localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 1, 1);
+                    sending = false;
                 } else {
                     sendBit();
                 }
             }
-
+ 
             //cycle connected interface
             connected.tick(ticks);
 
             //set bit 5 to connected.ready()
             localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 5, connected.ready());
+            //set bit 4 to 0
+            localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 4, receiving);
+            //set bit 3 to sending status
+            localMemRef[memPointer] = Util.setBit(((Int32)localMemRef[memPointer]), 3, sending);
         }
         private void sendBit()
         {
             connected.rec_bit((localMemRef[memPointer + 2] & (1 << currentBit)) != 0);
+            ++currentBit;
         }
         private bool isSending()
         {
-            return (localMemRef[memPointer] & (1 << 3)) != 0;
+            return sending;
         }
         public bool isOccupied()
         {

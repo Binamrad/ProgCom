@@ -375,7 +375,39 @@ namespace ProgCom
                 f.inst.AddFirst("movi sp, DATA_END");
             }
             if (opts[4]) {
-                throw new FormatException("You don't need to declare AUTLDR yet, silly");
+                //code is oncompatible with pic
+                if (opts[0]) {
+                    throw new FormatException("AUTLDR and PIC declared simultaneously. AUTLDR needs a non PIC environment to function");
+                }
+
+                //note that these will be ordered bottom-to-top, thus essentially being executed backwards
+                //go to program load location
+                f.inst.AddFirst("jmp PROG_POS + 20");
+                //restore registers
+                f.inst.AddFirst("sli r0, r4, 32");//restore EX
+                f.inst.AddFirst("mov r5, r4");
+                f.inst.AddFirst("mov r3, r4");
+                f.inst.AddFirst("mov r2, r4");
+                f.inst.AddFirst("mov r1, r4");
+                //tape load loop
+                f.inst.AddFirst("bl r2, r3, - 6");
+                f.inst.AddFirst("addi r2, r2, 1");
+                f.inst.AddFirst("addi r5, r5, 1");
+                f.inst.AddFirst("wr r1, r5, 0");
+                f.inst.AddFirst("callr r1");
+                f.inst.AddFirst("movi r1, 122");
+                //pre loop init
+                f.inst.AddFirst("movi r5, PROG_POS + 20");
+                f.inst.AddFirst("movi r2, 0");
+                //order tape to read program from drive
+                f.inst.AddFirst("callr r1");
+                f.inst.AddFirst("movi r1, 116");
+                //assemble instruction
+                f.inst.AddFirst("ori r2, r1, 2");
+                f.inst.AddFirst("sli r1, r1, 8");
+                //set r1 and r3 to length of program
+                f.inst.AddFirst("mov r3, r1");
+                f.inst.AddFirst("movi r1, DATA_END%rel + 1 - 20");//this is total length of the program since this is the first instruction loaded in memory
             }
             Dictionary<String, int> labels = new Dictionary<String, int>();
             labels.Add("TEXT_START", i);
@@ -443,6 +475,15 @@ namespace ProgCom
         private Int32 compile(String s, Dictionary<String, int> labels, bool PIC, UInt16 lineLocation)
         {
             string[] words = stringParameterSplit(s);
+            if (words.Length == 2) {
+                if (words[0].Equals("#literal")) {
+                    int literal;
+                    if (Util.tryParseTo<Int32>(words[1], out literal)) {
+                        return literal;
+                    }
+                }
+            }//this is here to allow for a bit of trickery
+
 
             Instruction inst;
             int reg1 = 0;
@@ -698,7 +739,7 @@ namespace ProgCom
             opts[1] = true;//MAINJMP
             opts[2] = true;//AUTOSTACK
             opts[3] = false;//ALWERR
-            opts[4] = false;//AUTLDR
+            opts[4] = true;//AUTLDR
             bool[] assigned = new bool[5];//has the above values been assigned;
             //read the meta part of the fileData, and determine how the program should be compiled
             foreach (String s in meta) {
@@ -712,7 +753,7 @@ namespace ProgCom
                             //just in case
                             bool b = opts[0];
                             if (optsAssignment(opts, 0, pars[1]) != b) {
-                                throw new FormatException("Contradictory assignements in meta field: " + s);
+                                throw new FormatException("Contradictory assignments in meta field: " + s);
                             }
                         } else {
                             assigned[0] = true;
@@ -724,7 +765,7 @@ namespace ProgCom
                             //just in case
                             bool b = opts[1];
                             if (optsAssignment(opts, 1, pars[1]) != b) {
-                                throw new FormatException("Contradictory assignements in meta field: " + s);
+                                throw new FormatException("Contradictory assignments in meta field: " + s);
                             }
                         } else {
                             assigned[1] = true;
@@ -736,7 +777,7 @@ namespace ProgCom
                             //just in case
                             bool b = opts[2];
                             if (optsAssignment(opts, 0, pars[1]) != b) {
-                                throw new FormatException("Contradictory assignements in meta field: " + s);
+                                throw new FormatException("Contradictory assignments in meta field: " + s);
                             }
                         } else {
                             assigned[2] = true;
@@ -748,7 +789,7 @@ namespace ProgCom
                             //just in case
                             bool b = opts[0];
                             if (optsAssignment(opts, 3, pars[1]) != b) {
-                                throw new FormatException("Contradictory assignements in meta field: " + s);
+                                throw new FormatException("Contradictory assignments in meta field: " + s);
                             }
                         } else {
                             assigned[3] = true;
@@ -760,7 +801,7 @@ namespace ProgCom
                             //just in case
                             bool b = opts[4];
                             if (optsAssignment(opts, 4, pars[1]) != b) {
-                                throw new FormatException("Contradictory assignements in meta field: " + s);
+                                throw new FormatException("Contradictory assignments in meta field: " + s);
                             }
                         } else {
                             assigned[4] = true;
@@ -768,7 +809,7 @@ namespace ProgCom
                         }
                         break;
                     default:
-                        throw new FormatException("Unrecognized assignement in meta field: " + s);
+                        throw new FormatException("Unrecognized assignment in meta field: " + s);
                 }
             }
             return opts;
