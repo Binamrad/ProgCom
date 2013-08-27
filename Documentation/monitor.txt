@@ -24,13 +24,13 @@ second char	 col. b	   ascii code
 
 Mode B:
 
-colors:		monochrome
+colors:		2
 resolution	256*256 pixels
 data size:	2048 words screen data
 
 Data format:
 each bit represents a pixel, 0 makes the pixel use color 0, while 1 makes it use color 1.
-the first word will set the first 32 bits from the upper left corner, wile successive entries will set pixels right and downwards.
+the first word will set the first 32 pixels from the upper left corner, wile successive entries will set pixels right and downwards.
 
 
 NOTES:
@@ -41,11 +41,12 @@ and put the data back, or temporarily store the standard tileset.
 
 locations of interest:
 
-label			location	contents
-GLOBAL_SCREEN		63488		screen data
-GLOBAL_SCREEN_COLOR	63472		color map
-GLOBAL_SCREEN_MODE	42		screen mode register
-GLOBAL_SCREEN_FONT	65024		font map
+label			location	size		contents
+
+GLOBAL_SCREEN		63488		see above	screen data
+GLOBAL_SCREEN_COLOR	63472		16		color map
+GLOBAL_SCREEN_MODE	42		1		screen mode register
+GLOBAL_SCREEN_FONT	65024		512		font map
 
 detailed explaination:
 
@@ -77,7 +78,7 @@ the default colors stored at this location are these:
 GLOBAL_SCREEN_FONT:
 
 this label points to the tileset used when in mode A.
-the tileset uses 512 words of data to store all tiles
+the tileset uses 512 words of data to store all tiles.
 each tile takes two words in memory, so there is a total of 256 tiles.
 each tile uses 8x8 pixels, each row being one byte.
 the rows are stored so that the first row is stored as the first 8 bits in a word

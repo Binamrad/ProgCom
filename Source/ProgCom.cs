@@ -16,9 +16,12 @@ namespace ProgCom
      * #literal <- done?
      * fix bit-shift EX zero if shifted 0, full to-EX copy otherwise <- done
      * add possibility to specify load location for programs when assembled <- done
-     * Finally update to goddamn partModule so that we can add the mod normally
-     * link to 0.21.1
-     * rle-compress tapes
+     * Finally update to goddamn partModule so that we can add the mod normally <- done-ish
+     * link to 0.21.1 <- done
+     * rle-compress tapes <- done
+     * messages when inserting tapes <- done
+     * save tapes <- done?
+     * fix weirdness with gui objects
      * overhaul cache memory <- postpone
      * add additional instructions; additional partial moves and cache bypass <-postpone
      * fix window ids <- done?
@@ -50,7 +53,7 @@ namespace ProgCom
             foreach (Part p in this.vessel.Parts) {
                foreach(PartModule pm in p.Modules) {
                    if (pm is ProgCom) {
-                       if (((ProgCom)pm).partActive && p != this) {
+                       if (((ProgCom)pm).partActive && pm != this) {
                            return true;
                        }
                    }
@@ -337,7 +340,8 @@ namespace ProgCom
             if (!shipHasOtherActiveComputer()) {
                 print("ProgCom initialised!");
                 partActive = true;
-                vessel.OnFlyByWire += new FlightInputCallback(performManouvers);
+                //vessel.OnFlyByWire += new FlightInputCallback(performManouvers);
+                vessel.OnFlyByWire += performManouvers;
                 //add the gui iff the vessel is the active vessel.
                 if (this.vessel.isActiveVessel) {
                     partGUI = true;
@@ -423,7 +427,6 @@ namespace ProgCom
             connect(keyb, 1);
             //connect tapedrive to serial port
             connect(tapeDrive, 0);
-
             
             running = false;
             //init default values in memory
@@ -912,18 +915,44 @@ namespace ProgCom
                     } else consoleWrite("Couldn't parse");
                     break;
                 case 2:
-                    if (S[0].Equals("load")) {
-                        loadWrapper(S[1], true, 128);
-                    } else if(S[0].Equals("insert")) {
+                    if(S[0].Equals("insert")) {
                         if(S[1].Equals("empty")) {
                             Int32[] media = new Int32[1024 * 256];
                             media[1] = 4711;
                             tapeDrive.insertMedia(media);
                         } else if(S[1].Contains('.')) {
-                            tapeDrive.insertMedia(tapeDrive.loadTape(S[1]));
+                            try {
+                                tapeDrive.insertMedia(tapeDrive.loadTape(S[1]));
+                                consoleWrite("Tape inserted!");
+                            }
+                            catch (Exception) {
+                                consoleWrite("Operation failed!");
+                            }
                         }
                     } else if(S[0].Equals("asm")) {
                         loadWrapper(S[1], false, 128);
+                    } else if (S[0].Equals("eject")) {
+                        if (!S[1].Equals("null")) {//If this is the case, just throw away the tape (and insert an empty one?)
+                            //save the tape (and insert empty?)
+                            if (S[1].Contains('.')) {
+                                tapeDrive.saveTapeInternal(S[1]);
+                            } else {
+                                tapeDrive.saveTapeInternal(S[1]+".pct");
+                            }
+                        }
+                        Int32[] media = new Int32[1024 * 256];
+                        media[1] = 4711;
+                        tapeDrive.insertMedia(media);
+
+                    } else if (S[0].Equals("save")) {
+                        if (!S[1].Equals("null")) {//If this is the case, just throw away the tape (and insert an empty one?)
+                            //save the tape (and insert empty?)
+                            if (S[1].Contains('.')) {
+                                tapeDrive.saveTapeInternal(S[1]);
+                            } else {
+                                tapeDrive.saveTapeInternal(S[1] + ".pct");
+                            }
+                        }
                     } else if (S[0].Equals("print")) {
                         if (Util.tryParseTo<UInt16>(S[1], out tmp)) {
                             for (int i = 0; i < 100; ++i) {

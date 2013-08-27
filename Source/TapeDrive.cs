@@ -21,7 +21,7 @@ namespace ProgCom
     //2: "read only" mode if not 0
     //3: data begins here
 
-    class TapeDrive : ASerialTranceiver
+    class TapeDrive : ASerialTransceiver
     {
         //memory manipulation variables
         private Int32[] mem;
@@ -89,6 +89,7 @@ namespace ProgCom
             Int32[] tape = new Int32[1024 * 256];
             for (int i = 0; i < 1024 * 256; ++i) {
                 String line = t.ReadLine();
+                if (line == null || "".Equals(line)) return tape;
                 if (!Util.tryParseTo<Int32>(line, out tape[i])) {
                     throw new FormatException("Not an Int32: " + line + " in: " + name);
                 }
@@ -97,13 +98,22 @@ namespace ProgCom
             return tape;
         }
 
+        public void saveTapeInternal(String name)
+        {
+            saveTape(name, mem);
+        }
         public void saveTape(String name, Int32[] tape)
         {
             //find the file and load it. Return false if it does not exist
             //this function will call insertMedia to do the final stuff with the stuff
             TextWriter t = TextWriter.CreateForType<TapeDrive>(name);
-            foreach (int i in tape) {
-                t.WriteLine(i);
+            //find the last line that is non-zero
+            int index = 1024 * 256 - 1;
+            while (tape[index] == 0) {
+                --index;
+            }
+            for(int i = 0; i < index; ++i) {
+                t.WriteLine(tape[i]);
             }
             t.Close();
         }
@@ -224,8 +234,10 @@ namespace ProgCom
                 case 0:
                     break;
                 case 1:
-                    traveling = true;
-                    travelToPos = (UInt32)(argument * 32);
+                    if (mem != null) {
+                        traveling = true;
+                        travelToPos = (UInt32)(argument * 32);
+                    }
                     break;
                 case 2:
                     if (canRead) {
@@ -268,7 +280,7 @@ namespace ProgCom
                     break;
                 case 9:
                     //is tape inserted?
-                    if (mem != null) {
+                    if (mem != null && canRead) {
                         sendCache.Enqueue(1);
                     } else {
                         sendCache.Enqueue(0);

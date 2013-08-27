@@ -5,7 +5,7 @@ using System.Text;
 
 namespace ProgCom
 {
-    public abstract class ASerialTranceiver : ISerial
+    public abstract class ASerialTransceiver : ISerial
     {
         //connected interface
         private ISerial connected;

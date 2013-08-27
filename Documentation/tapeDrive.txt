@@ -1,0 +1,120 @@
+Connects by default to GSB_0
+
+Tape drive specs
+reading speed:		6000 words/second
+traveling speed:	12000 words/second
+buffer:			32 words
+
+Tape specs:
+size:			1024*256 words of data
+
+Tape layout:
+0:			unused
+1:			if not 4711, the tape drive will assume the tape is invalid and refuse to read/write to it
+2:			if not zero the tape will be in a read-only state. The tape will have to be ejected and reinserted before the tape drive recognises that this flag has changed.
+3->22:			if all of these are non-zero, they will be assumed to be containing a boot loader and be inserted into memory at 128+ at progCom start.
+23+:			free space
+
+Communication protocol:
+Low byte:	Meaning:						Verbose:
+
+ 0 		do nothing						This input is ignored
+ 1 		move to high 3 bytes					set reading position to X, where X is the integer contained in the upper 3 bytes of the parameter sent to the drive
+ 2 		read high 3 bytes data					read X words, where X is the integer contained in the upper 3 bytes of the parameter sent to the drive
+ 3 		stop reading						immediately stop reading from the tape
+ 4 		purge buffered data					The tape contains a buffer for data In case it can't send as fast as it can read. This command purges that buffer.
+ 5 		set pointer to 0					Move reading position to the beginning of the tape
+ 6 		set pointer to argument					same as 2, but parameter is interpreted as bits rather than words. (the tape cannot read non-aligned words though, I think)
+ 7 		is tape writable?					returns false iff the tape is in read-only mode
+ 8 		is tape readable?					returns false iff the tape is invalid
+ 9 		tape inserted?						returns false if no tape is inserted(I'm not sure this is even possible) or if the tape is invalid.
+ 10 		write next high 3 bytes of data sent to drive to tape	the X next words sent to the tape drive will be interpreted as data to be written to the tape. It is impossible to make the drive stop interpreting input as stuff to write, so be careful.
+
+So, in order to read 10 words from the tape from address 16 onwards you must, in order:
+
+1:	send 0x1001 to the tape drive
+2:	wait for the tape to travel to position
+3:	send 0x0a02 to the tape drive
+4:	read the 10 words as they appear in GSB_0 input register
+
+
+Example code:
+This is the program that runs automatically when progCom is turned on.
+It loads the first 20 words at the addresses 3->22 if all of them are non-zero.
+the number after every line specifies the memory address the line is located at.
+
+
+.meta
+AUTLDR=FALSE
+AUTOSTACK=FALSE
+MAINJMP=FALSE
+.text
+;two instructions to spend
+nop;96
+nop;97
+;*******************************************
+;		Wait for tape insertion
+;*******************************************
+tapeLoop:
+	;check if there is a tape inserted
+	movi	r2, 0x9;98
+	call	sendToTapeDrive;99
+
+	call	waitForInput;100
+	beq	r1, r0, tapeLoop;101
+;*******************************************
+;		Go to boot sector
+;*******************************************
+	;move to pos 3
+	movi	r2, 0x301;102
+	call	sendToTapeDrive;103
+	
+	;read 20 words
+	movi	r2, 0x1402;104
+	call	sendToTapeDrive;105
+
+;*******************************************
+;		Read program loader
+;*******************************************
+	subi	r2, r0, 20;106
+loop:
+	;wait until we have input, then read it and write to ram
+	call	waitForInput;107
+	
+	bne	r1, r0, 3;108:	if no bootloader, don't attempt to boot
+	movi	r2, 0x3;109: 	stop reading if one word is 0
+	call	sendToTapeDrive;110
+	br	tapeLoop;111
+
+	wr	r1, r2, 128+20;112
+	addi	r2, r2, 1;113
+	bl	r2, r0,	loop;114
+	br	end;115
+
+;*******************************************
+;		helper functions
+;*******************************************
+;functions
+
+;sends r2 to tape drive
+sendToTapeDrive:
+;waitForSending to be possible
+	rd	r1, r0, GLOBAL_GSB0;116
+	andi	r1, r1, 0b101000;117
+	subi	r1, r1, 0b100000;118
+	bne	r0, r1, sendToTapeDrive;119
+;send to tape
+	wr	r2, r0, GLOBAL_GSB0+2;120
+	jmpr	ra;121
+
+;waits for input and then returns it in r1
+waitForInput:
+	rd	r1, r0, GLOBAL_GSB0;122
+	andi	r1, r1, 0b100;123
+	beq	r1, r0, waitForInput;124
+	rd	r1, r0, GLOBAL_GSB0+1;125
+	wr	r0, r0, GLOBAL_GSB0;126
+	jmpr	ra;127
+
+end:
+	;end of loader.
