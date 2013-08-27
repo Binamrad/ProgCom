@@ -1,3 +1,27 @@
+v.0.9
+Added a tape drive.
+Made some clarifications to the serial bus documentation
+Fixed a bug that prevented data being sent from ProgCom to parts connected via the serial bus.
+There is not an abstract class called ASerialTranceiver that should make interfacing external mods to ProgCom easier
+Added an interface that will make it possible to use any part instead of a progCom part as the central hub for connecting serials.
+The "sending", "recipied ready" and "receiving" flags from the serial bus should no longer be able to be overwritten.
+when in debug mode, the clock rate is now tied to one cycle per frame ratehr than the old systems. This should meke it update at a more reasonable speed for most people.
+Typing "step" into the console will now make the emulator execute the next instruction
+The print command now takes an offset: "print 100" would print the contents of memory locations 100 -> 200
+The serial bus will now only start a transmission if you write to the output buffer
+The autldr meta option now defaults to true.
+ProgCom now has a tape drive. It is possible to save and load data from it. Programs are now loaded using the drive. See documentation for details.
+added the #literal statement to the assembler that should let you insert arbitrary data into the .text section of the program
+
+
+v.0.8.3
+Made some clarifications to the documentation regarding the new literals.
+
+
+v.0.8.2
+Added kellpossibles radial part
+
+
 v.0.8.1
 A couple of labels were not documented. They have now been added to the documentation.
 readString in libText.txt should no longer write things to the numpad output areas
@@ -8,7 +32,7 @@ you can now adjuse the accuracy of the speed vectors in the same way you can adj
 the movb, movbl, movhw, movhwl instructions have been added to make string handling easier
 the muli and divi instructions should state their proper execution time in opcodes.txt
 the sri and sli instructions now properly state that their third argument is a constant in opcodes.txt
-thanks to thewonderidiot, you should now be able to use hexadecimal and binary constants wherever one is required
+thanks to thewonderidiot, you should now be able to use hexadecimal and binary literals wherever one is required
 
 
 v.0.8

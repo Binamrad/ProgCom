@@ -16,9 +16,14 @@ namespace ProgCom
         UInt16 modePtr;
         Color[] colors;
         public bool visible;
+        protected int windowID;
+
+
 
         public Monitor(Int32[] arr, UInt16 ptr, UInt16 chars, UInt16 colPtr, UInt16 modePointer)
         {
+            windowID = Util.random();
+
             mem = arr;
             pointer = ptr;
             charSetPtr = chars;
@@ -33,7 +38,7 @@ namespace ProgCom
             image = new Texture2D(256, 256, TextureFormat.ARGB32, false);
             windowPos = new Rect();
             if ((windowPos.x == 0) && (windowPos.y == 0))//windowPos is used to position the GUI window, lets set it in the center of the screen
-        {
+            {
                 windowPos = new Rect(Screen.width / 2, Screen.height / 2, 100, 100);
             }
             //Set all the pixels to black. If you don't do this the image contains random junk.
@@ -135,7 +140,7 @@ namespace ProgCom
         {
             if (visible) {
                 GUI.skin = HighLogic.Skin;
-                windowPos = GUILayout.Window(2, windowPos, windowGUI, "Monitor", GUILayout.MinWidth(100));
+                windowPos = GUILayout.Window(windowID, windowPos, windowGUI, "Monitor", GUILayout.MinWidth(100));
             }
         }
 

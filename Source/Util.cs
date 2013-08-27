@@ -3,24 +3,29 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Reflection;
+using KSP.IO;
 
 //this class contains various utility functions that are needed in several places
 namespace ProgCom
 {
     static class Util
     {
+        static System.Random rng;
+
         //bitwise copy float to integer
         public static Int32 ftoi(float f)
         {
             byte[] b = BitConverter.GetBytes(f);
             return BitConverter.ToInt32(b, 0);
         }
+
         //bitwise copy integer to float
         public static float itof(Int32 f)
         {
             byte[] b = BitConverter.GetBytes(f);
             return BitConverter.ToSingle(b, 0);
         }
+
         //cut a string after a specific sequence
         public static String cutStrAfter(String s, String end)
         {
@@ -114,7 +119,6 @@ namespace ProgCom
             return finalStr;
         }
 
-
         //set the specified bit to value
         public static int setBit(Int32 i, int bitPosition, bool bitVal)
         {
@@ -173,6 +177,15 @@ namespace ProgCom
             }
 
             return true;
+        }
+
+        //random number generator
+        public static int random()
+        {
+            if (rng == null) {
+                rng = new System.Random();
+            }
+            return rng.Next();
         }
     }
 }
