@@ -124,7 +124,7 @@ opcode		addr. field	instruction name	cycles	rA	rB	address/const/rC	pc-relative
 0x3f		--		--			--	--	--	--
 
 
-*	all branch instructions take two cycles if the branch is taken, one if it isn't
+*	all conditional branch instructions take two cycles if the branch is taken, one if it isn't
 **	all read/write instructions take one cycle if the memory location is cached, 17 otherwise (9 + row size (8) ). These are also the ammount of cycles it takes to load an instruction.
 ***	The CPU always take 1 cycle to execute the instructions except for when using fpush and fpop, when it has to wait for the FPU to finish operations.
 ****	Both stacks have to complete their operations before this instruction can execute. Thus, after this instruction has run, both stacks will be busy for max(floatStack0BusyCycles,floatStack1BusyCycles) +2 cycles

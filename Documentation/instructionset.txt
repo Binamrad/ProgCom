@@ -67,7 +67,7 @@ GLOBAL_SCREEN_FONT		65024	font map
 
 GLOBAL_GSB0			64	serial bus 0
 GLOBAL_GSB1			68	serial bus 1
-...
+...				...	...
 GLOBAL_GSB7			92	serial bus 7
 
 non-address labels (note: you can generally assume these need the movil instruction):
@@ -110,6 +110,7 @@ pc = program counter, 16-bit unsigned integer
 Most instructions are written on the form
 "instruction rA rB rC/C/lC"
 sometimes one or several are left out, but they are always listed in that order.
+the constant can be declared as a hexadecimal number (prefixed with 0x), a binary number(prefixed with 0b) or a base-10 number (no prefix)
 
 Name:		Meaning:			Result:				Example:
 
@@ -127,8 +128,8 @@ movil		MOVe Immediate Long		rA = lC				movil	r1, 600000
 movhi		MOVe HIgh			rA = C  << 16			movhi	r1, 4
 shl		SHift Left			rA = rB << rC			shl	r1, r2, r3
 sli		Shift Left Immediate		rA = rB << C			sli	r1, r2, 4
-shr		SHift Right			rA = rB >> rC			shr	r1, r2, r3
-sri		Shift Right Immediate		rA = rB >> C			sri	r1, r2, 4
+shr		SHift Right (logical)		rA = rB >> rC			shr	r1, r2, r3
+sri		Shift Right Immediate (logical)	rA = rB >> C			sri	r1, r2, 4
 and		bitwise AND			rA = rB & rC			and	r1, r2, r3
 andi		bitwise	AND Immediate		rA = rB & C			andi	r1, r2, 4
 or		bitwise OR			rA = rB | rC			or	r1, r2, r3
@@ -149,7 +150,7 @@ bl		Branch if Less than		pc += C  if rA < rB		bl	r1, r2, label
 ble		Branch if Less or Equal		pc += C  if rA <= rB		ble	r1, r2, label
 call		CALL				r15 = pc, pc += C		call	label
 callr		CALL Register			r15 = pc, pc = rC		call	r1
-bx		Branch eX 			px += C  if EX != 0		bx	label
+bx		Branch eX 			pc += C  if EX != 0		bx	label
 rd		ReaD				rA = mem(rB + C)		rd	r1, r2, label
 rdx		ReaD eX				EX = mem(rB + C)		rdx	r1, label
 wr		WRite				mem(rB+C) = rA			wr	r1, r2, label
@@ -208,6 +209,7 @@ bit	0:	enables interrupts
 when an interrupt occurs pc is immidiately set to the adress stored at "GLOBAL_IADRESS".
 when the cpu jumps, interrupts are immidiately disabled.
 one interrupt can be handled per instruction executed.
+256 interrupts can be queued at a time
 
 when hardware exceptions occur, values of 256 or higher are copied into the es register. this is what the values mean:
 256:	timer has flipped to 0
@@ -233,7 +235,7 @@ PIC		default: off	will make a bunch of errors if you try to perform an operation
 MAINJMP		default: on	will add the line "br main" in the beginning of the file. This will make the code start execution at the "main"-label declared #global
 AUTOSTACK	default: on	will add the line "movi	sp, DATA_END" at the beginning of the file. This will automatically set the stack pointer to a good-ish position.
 ALWERR		default: off	will make sure that if there is a warning somewhere, the warning will stop compilation. This probably does nothing at the moment
-AUTLDR		default: off	gives an error message when enabled, doesn't do anything yet.
+AUTLDR		default: on	will insert a program loader into the 20 instructions that are automatically loaded from tape. Without this it would be neccessary to manually create such a subroutine in the proper position, unless the program fits into 20 instructions.
 the syntax is this:
 .meta
 PIC=FALSE
@@ -254,13 +256,14 @@ main:
 
 the .data section contains all data the program needs
 labels can still be used here
-data can be declared as hexadecimal, floating point or normal base 10 integers.
+data can be declared as hexadecimal, binary, floating point or normal base 10 integers.
 example:
 .data
 some_data:
-0x10
-16
-16.0
+0b10000	;binary number
+0x10	;hexadecimal number
+16	;base 10
+16.0	;floating point
 
 labels:
 
@@ -337,19 +340,26 @@ movi	r1, foo
 .data
 	foo
 
+#literal <constant> will place the constant evaluated as a word in the program exactly where it is placed.
+It is intended for putting arbitrary data into the .text section.
+can only be used in the .text section.
+
 
 Computer control panel:
 
 To run a program on the cpu, first write the program in a plain text file. The file can be run by using the command
-"load run <filename>" in the console.
+"insert asm <filename>" in the console.
 all programs you want to load should be stored in PluginData/programmableComputer
 
 console commands:
-load [opt: run] <filename>		load the file into memory. using the optional run command will start the file as a program. omitting the second argument will simply leave the data in memory.
-print					prints the first 100 memory locations in the dev console (alt-f2)
+insert [opt: asm] <filename>		Inserts the tape <filename> into the drive. using the optional asm command will signify that you are not loading a tape but assembly code. if "empty" is used as the filename, an empty tape is inserted.
+print <offset>				prints the first 100 memory locations after the offset in the dev console (alt-f2)
 clear					clears the console.
-run <number>				set pc to <number> and start the computer.
-debug					toggle the emulators debug mode. This makes it run at 120Hz and print everything it's doing to the dev console (Alt-f2).
+debug					toggle the emulators debug mode. This makes it run at 1Hz per frame and print everything it's doing to the dev console (Alt-f2).
+step					if in debug mode, this will run the next instruction
+asm <filename>	[opt: <location>]	will create a tape file (extension .pct) and save it into the plugindata folder. if the location is specified the program will be expected to be loaded there. (default(unspecified) is 128)
+save <filename>				will save the currently inserted tape into the pluginData folder
+eject <filename>			will save the currently inserted tape into the plugindata folder, unless "null" is used as the filename. Afterwards it inserts an empty tape into the drive.
 
 explaination of the buttons at the top of the panel:
 
@@ -358,6 +368,8 @@ CTL		toggles whether the computer can control pitch/yaw/roll etc. on and off. It
 TTL		toggles whether the computer may control the throttle.
 RST		resets the computer
 GUI		minimizes/maximises the computer ui panel
+MON		displays/hides the monitor
+KBD		displays/hides the keyboard
 
 
 Misc:
