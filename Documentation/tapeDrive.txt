@@ -1,120 +1,179 @@
-Connects by default to GSB_0
-
 Tape drive specs
 reading speed:		6000 words/second
 traveling speed:	12000 words/second
-buffer:			32 words
+buffer:			32 words in, 32 words out
 
 Tape specs:
 size:			1024*256 words of data
 
+
 Tape layout:
+
 0:			unused
 1:			if not 4711, the tape drive will assume the tape is invalid and refuse to read/write to it
 2:			if not zero the tape will be in a read-only state. The tape will have to be ejected and reinserted before the tape drive recognises that this flag has changed.
-3->22:			if all of these are non-zero, they will be assumed to be containing a boot loader and be inserted into memory at 128+ at progCom start.
-23+:			free space
+3:			the default bootloader uses this address as a pointer to the program to load from the tape
+4-7:			reserved			
+8+:			free space
+
+
+Associated memory addresses
+address:	label:				Verbose:
+
+64		GLOBAL_TAPE_OUT			contents of this register are sent to the tape drive, the output buffer
+65		GLOBAL_TAPE_IN			this register contains data sent from the tape drive, the input buffer
+66		GLOBAL_TAPE_STATUS		This <<< contains the tape drive status
+67		GLOBAL_TAPE_INTERRUPT		Error values. When written to, the 'writing' status is cancelled. as long as this register is non-zero, interrupts will be made while enabled.
+
+Status Register:
+bit:		meaning:
+0		input buffer is full
+1		output buffer is empty
+2		interrupt enable bit
+3		tape drive busy
+4		write buffer full
+5		read buffer full
+6		writing data to tape
+7		interrupt on obe toggle
+
+
+Interrupt Register:
+value		meaning
+0		nothing
+1		unrecognised command sent to drive
+2		end of tape reached during operation
+3		attempted to interrupt the drive when it was busy
+4		data buffer overflow
+
 
 Communication protocol:
-Low byte:	Meaning:						Verbose:
+Low byte:	Meaning:			Verbose:
 
- 0 		do nothing						This input is ignored
- 1 		move to high 3 bytes					set reading position to X, where X is the integer contained in the upper 3 bytes of the parameter sent to the drive
- 2 		read high 3 bytes data					read X words, where X is the integer contained in the upper 3 bytes of the parameter sent to the drive
- 3 		stop reading						immediately stop reading from the tape
- 4 		purge buffered data					The tape contains a buffer for data In case it can't send as fast as it can read. This command purges that buffer.
- 5 		set pointer to 0					Move reading position to the beginning of the tape
- 6 		set pointer to argument					same as 2, but parameter is interpreted as bits rather than words. (the tape cannot read non-aligned words though, I think)
- 7 		is tape writable?					returns false iff the tape is in read-only mode
- 8 		is tape readable?					returns false iff the tape is invalid
- 9 		tape inserted?						returns false if no tape is inserted(I'm not sure this is even possible) or if the tape is invalid.
- 10 		write next high 3 bytes of data sent to drive to tape	the X next words sent to the tape drive will be interpreted as data to be written to the tape. It is impossible to make the drive stop interpreting input as stuff to write, so be careful.
+0		nop				do nothing
+1		read				will read the ammount of words specified by the high 3 bytes of the word sent to tape
+2		seek				will make the tape seek to the position specified by the high 3 bytes of the word sent to tape
+3		write				will interpret the
+4		stop				will stop the current task, unless that task is writing input to tape
+5		tape inserted			will send back 1 if a tape is inserted, 0 if not
+6		tape readable			will send back 1 if a tape is readable, 0 if not
+7		tape writeable			will send back 1 if a tape is writeable,0 if not
+8		purge data buffers		removes all buffered data from tape drive
+9		disable data buffering		will make sure no data is stored on the data buffers
+10		enable data buffering		will make sure 32 words of input/output can be buffered on the tape drive
+11		relative seek			will move forwards/backwards relative to the current position
+12		get tape pointer		returns the current position the tape is reading from
 
 So, in order to read 10 words from the tape from address 16 onwards you must, in order:
 
-1:	send 0x1001 to the tape drive
+1:	send 0x1002 to GLOBAL_TAPE_OUT
 2:	wait for the tape to travel to position
-3:	send 0x0a02 to the tape drive
-4:	read the 10 words as they appear in GSB_0 input register
+3:	send 0x0a01 to GLOBAL_TAPE_OUT
+4:	read the 10 words as they appear in GLOBAL_TAPE_IN register
+
 
 
 Example code:
 This is the program that runs automatically when progCom is turned on.
-It loads the first 20 words at the addresses 3->22 if all of them are non-zero.
-the number after every line specifies the memory address the line is located at.
-
+It loads the stored program from a tape according to the specifications contained therein.
+It is stored at address 128.
 
 .meta
 AUTLDR=FALSE
-AUTOSTACK=FALSE
 MAINJMP=FALSE
+PIC=FALSE
+AUTOSTACK=FALSE
 .text
-;two instructions to spend
-nop;96
-nop;97
-;*******************************************
-;		Wait for tape insertion
-;*******************************************
-tapeLoop:
-	;check if there is a tape inserted
-	movi	r2, 0x9;98
-	call	sendToTapeDrive;99
 
-	call	waitForInput;100
-	beq	r1, r0, tapeLoop;101
-;*******************************************
-;		Go to boot sector
-;*******************************************
-	;move to pos 3
-	movi	r2, 0x301;102
-	call	sendToTapeDrive;103
+;print "please insert bootable media" message when possible
+
+boot:
+;******************************************************
+;	Wait for tape to be inserted and readable
+;******************************************************
+	movi	r1, 6				;128
+	call	sendToTape			;129
+	call	tapeRead			;130
+	beq	r1, r0, boot			;131
+;******************************************************
+;	Read bootloader pointer
+;******************************************************
+	;move tape to bootloader pointer
+	movi	r1, 0x302			;132
+	call	sendToTape			;133
+
+	;read one word
+	movi	r1, 0x101			;134
+	call	sendToTape			;135
+	call	tapeRead			;136
+
+	;if bootloader location is 0, branch to start
+	beq	r1, r0, boot			;137
+;******************************************************
+;	Read boot file information
+;******************************************************
+	;move tape to bootloader position
+	sli	r1, r1, 8			;138
+	ori	r1, r1, 2			;139
+	call	sendToTape			;140
 	
-	;read 20 words
-	movi	r2, 0x1402;104
-	call	sendToTapeDrive;105
+	;send command to read 2 words
+	movi	r1, 0x201			;141
+	call	sendToTape			;142
+	;read load location
+	call	tapeRead			;143
+	mov	a0, r1				;144
+	mov	r3, r1				;145
 
-;*******************************************
-;		Read program loader
-;*******************************************
-	subi	r2, r0, 20;106
-loop:
-	;wait until we have input, then read it and write to ram
-	call	waitForInput;107
-	
-	bne	r1, r0, 3;108:	if no bootloader, don't attempt to boot
-	movi	r2, 0x3;109: 	stop reading if one word is 0
-	call	sendToTapeDrive;110
-	br	tapeLoop;111
+	;read program length
+	call	tapeRead			;146
+	mov	a1, r1				;147
+	mov	r4, r1				;148
+;******************************************************
+;	Load program into proper position
+;******************************************************
+	;order tape to read entire program
+	sli	r1, r1, 8			;149
+	ori	r1, r1, 1			;150
+	call	sendToTape			;151
+	;read program data from tape
+readLoop:
+	call	tapeRead			;152
+	wr	r1, r3, 0			;153
+	addi	r3, r3, 1			;154
+	subi	r4, r4, 1			;155
+	bne	r4, r0, readLoop		;156
+;******************************************************
+;	Start program
+;******************************************************
+	;branch to program address
+	jmpr	a0				;157
 
-	wr	r1, r2, 128+20;112
-	addi	r2, r2, 1;113
-	bl	r2, r0,	loop;114
-	br	end;115
 
-;*******************************************
-;		helper functions
-;*******************************************
-;functions
+;******************************************************
+;	Helper functions
+;******************************************************
+;waits for appropriate flags and then sends stuff to tape
+sendToTape:
+	;wait for busy flag false
+	rd	r2, r0, GLOBAL_TAPE_STATUS	;158
+	andi	r2, r2, 8			;159
+	bne	r2, r0, sendToTape		;160
 
-;sends r2 to tape drive
-sendToTapeDrive:
-;waitForSending to be possible
-	rd	r1, r0, GLOBAL_GSB0;116
-	andi	r1, r1, 0b101000;117
-	subi	r1, r1, 0b100000;118
-	bne	r0, r1, sendToTapeDrive;119
-;send to tape
-	wr	r2, r0, GLOBAL_GSB0+2;120
-	jmpr	ra;121
+	;wait for OBE flag true
+OBE_wait_loop:
+	rd	r2, r0, GLOBAL_TAPE_STATUS	;161
+	andi	r2, r2, 2			;162
+	beq	r2, r0, OBE_wait_loop		;163
 
-;waits for input and then returns it in r1
-waitForInput:
-	rd	r1, r0, GLOBAL_GSB0;122
-	andi	r1, r1, 0b100;123
-	beq	r1, r0, waitForInput;124
-	rd	r1, r0, GLOBAL_GSB0+1;125
-	wr	r0, r0, GLOBAL_GSB0;126
-	jmpr	ra;127
+	wr	r1, r0, GLOBAL_TAPE_OUT		;164
+	jmpr	ra				;165
 
-end:
-	;end of loader.
+
+;waits for IBF flag and returns stuff in r1
+tapeRead:
+	rd	r1, r0, GLOBAL_TAPE_STATUS	;166
+	andi	r1, r1, 1			;167
+	beq	r1, r0, tapeRead;wait loop	;168
+
+	rd	r1, r0, GLOBAL_TAPE_IN		;169
+	jmpr	ra				;170

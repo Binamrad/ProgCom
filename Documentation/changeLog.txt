@@ -1,3 +1,33 @@
+v.0.10
+removed the r13, r14, r15, a15, a14, a13 register names in order to make things less confusing. The only register that can be accessed by two names now is r0, which also is called "zero"
+moved ex to a normal register. This made the ax, sx, rdx, bx instructions redundant, and they have been removed
+registers now start initialised to 0 instead of 3735932941
+Added a new way of interfacing with Progcom: directly memory mapping your parts.
+fixed a bug when saving tapes where the last word would not be saved
+removed the serial buses and all associated code, as they have been deprecated by the new hardware system
+redid the tape drive from scratch
+Fixed a bug where the computer would not load a program if the tape was inserted after the computer is turned on
+all programs are now compiled to start at address 256 unless otherwise specifed.
+The computer rcs control and the player rcs input listener seems to have been bound to the same area in memory. This is no longer the case.
+most of the peripherals(player input listener, stage activation etc.) have been moved away from the progcom class and into separate partmodules.
+Added a compiler for a higher level language
+renamed #string to #string_compact. renamed #stringw to #string
+improved the text printing library. It now works with the non-compact strings. I also removed some buggy features and made the printing work in a more straightforward manner.
+The built in string reading function in the text library now works a little more logically
+debug console output is now more useful.
+labels are no longer hardcoded into the compiler. In order to use them include libLabel.txt
+the documentation for the labels are now stored in hardware.txt instead of instructionset.txt
+added additional instructions:
+	* two additional memory access instructions, wrr and rdr, that calculate read address by adding two registers instead of a register and a constant.
+	* inti, which spawns an interrupt using a constant
+	* added an arithmetic right shift, sra/srai
+	* there is a new operation for the floating point stack, fss, which gives information on the floating point unit.
+	* there are now partial move instructions that take a register as their third parameter instead of a constant. Their names are movbr, movhwr, movblr, movhwlr
+the cache memory now behaves a little more logically
+the read and pop instructions now take an additional cycle to execute if the result is used in the next instruction.
+cleaned up the documentation somewhat
+
+
 v.0.9
 Added a tape drive.
 Made some clarifications to the serial bus documentation

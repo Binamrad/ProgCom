@@ -5,51 +5,38 @@ using System.Text;
 using UnityEngine;
 namespace ProgCom
 {
-    class Keyboard : ISerial
+    public class Keyboard : PartModule, IPCHardware, PCGUIListener
     {
-        ISerial connected;
         int charSend;
         protected Rect windowPos;
         bool sending = false;
         int bitSend = 0;
         int lastSent = 0;//here to make sure we don't send an infinite flood of characters to the cpu
-        public bool visible = false;
         LinkedList<int> buttonsDown;
         protected int windowID;
+        Int32[] memarea = new Int32[2];
+        GUIStates guis = new GUIStates();
+        InterruptHandle inth;
 
-        public Keyboard()
+        public override void OnStart(PartModule.StartState state)
         {
+            base.OnStart(state);
             windowID = Util.random();
             windowPos = new Rect(Screen.width / 2, Screen.height / 2, 100, 100);
             buttonsDown = new LinkedList<int>();
+            RenderingManager.AddToPostDrawQueue(3, new Callback(draw));
         }
-
-        public void connect(ISerial s)
-        {
-            connected = s;
-        }
-
-        public void disconnect()
-        {
-            connected = null;
-        }
-
-        // we don't care about these yet
-        public void rec_bit(bool b) { }
-        public void rec_send_done() { }
-        public void rec_sending() { }
-        public bool ready() { return false; }
 
         //if a key has been pressed, send one bit per cycle for 32 cycles
         public void tick(int c)
         {
-            while (c > 0 && sending && connected.ready()) {
-                connected.rec_bit(((charSend) & (1 << bitSend)) != 0);
+            while (c > 0 && sending) {
                 ++bitSend;
                 if (bitSend == 32) {
                     sending = false;
                     bitSend = 0;
-                    connected.rec_send_done();
+                    memarea[0] = charSend;
+                    memarea[1] = 1;
                 }
                 --c;
             }
@@ -60,10 +47,6 @@ namespace ProgCom
         {
             //input line
             if (Event.current.type == EventType.KeyDown || Event.current.type == EventType.KeyUp) {
-                //TODO:if keyUp, send negative version of asdfgh <-Done?
-                //TODO:if prev char sent is current char sending, don't send <-Done?
-                //TODO:make some documentation on whatever the hell this thing outputs
-
                 //get the button that is pressed
                 char c = Event.current.character;
                 int i = (int)c;
@@ -83,7 +66,7 @@ namespace ProgCom
                 }
 
                 //send the stuff
-                if (connected != null && !buttonsDown.Contains(charSend) && !sending) {
+                if ( !buttonsDown.Contains(charSend) && !sending) {
                     if (charSend < 0) {
                         buttonsDown.Remove(-charSend);
                     } else {
@@ -91,14 +74,10 @@ namespace ProgCom
                     }
                     int tmp = lastSent;
                     lastSent = charSend;
-                    //if (tmp != 0) {//remove this darnit
-                    //    throw new FormatException("lastSent: " + tmp + " charSend: " + charSend);
-                    //}
                     sending = true;
                     bitSend = 0;
-                    connected.rec_sending();
                 }
-                Event.current.Use();
+                Event.current.Use();//removes event from event queue
             }
             GUILayout.TextField("");
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
@@ -106,10 +85,50 @@ namespace ProgCom
 
         public void draw()
         {
-            if (visible) {
+            if (guis.kbd) {
                 GUI.skin = HighLogic.Skin;
                 windowPos = GUILayout.Window(windowID, windowPos, guiFunction, "Keyboard", GUILayout.MinWidth(100));
             }
+        }
+
+        public void connect()
+        {
+            
+        }
+
+        public void disconnect()
+        {
+            
+        }
+
+        public Tuple<ushort, int> getSegment(int id)
+        {
+            return new Tuple<UInt16, int>(68, 2);
+        }
+
+        public int getSegmentCount()
+        {
+            return 1;
+        }
+
+        public void recInterruptHandle(InterruptHandle seg)
+        {
+            inth = seg;
+        }
+
+        public int memRead(ushort position)
+        {
+            return memarea[position - 68];
+        }
+
+        public void memWrite(ushort position, int value)
+        {
+            memarea[position - 68] = value;
+        }
+
+        public void recGUIState(GUIStates g)
+        {
+            guis = g;
         }
     }
 }

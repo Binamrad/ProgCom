@@ -1,0 +1,144 @@
+A brief summary of the hardware in progcom and the relevant memory addresses and interrupts associated with them.
+
+Control:
+
+address		label				verbose
+0		GLOBAL_MAINTHROTTLE		the throttle for the ship. 0 is minimum, 1024 is maximum.
+1		GLOBAL_YAW			yaw control for the ship. -1024 is minimum, 1024 is maxium.
+2		GLOBAL_PITCH			pitch control for the ship. -1024 is minimum, 1024 is maximum.
+3		GLOBAL_ROLL			roll control for the ship. -1024 is minimum, 1024 is maximum.
+56		GLOBAL_RCS_RIGHT		RCS rightwards control for the ship. -1024 is minimum, 1024 is maxium.
+57		GLOBAL_RCS_UP			RCS upwards control for the ship. -1024 is minimum, 1024 is maxium.
+58		GLOBAL_RCS_FORWARD		RCS forward control for the ship. -1024 is minimum, 1024 is maxium.
+
+interrupts	cause
+none		--
+
+
+Navigation:
+
+Most of the vectors here are in a fixed point format. The ordering of the parameters of the vectors are adress = X, adress+1 = Y, adress+2 = Z.
+the accuracy of the fixed point vectors are determined by the value at GLOBAL_VERTORACCURACY. (the behind-the-scenes conversion from the floats that the game uses to the fixed point vectors is this: (int)(vector.whatever*global_vectorAccuracy)) All speed readings use *GLOBAL_SPEEDACCURACY rather than vectoracuracy.
+
+
+address		label				verbose
+4		GLOBAL_SURFACE_EAST		the eastwards vector of the surface, in x,y,z of the scene coordinate system
+7		GLOBAL_SURFACE_UP		the upwards vector of the surface, in x,y,z of the scene coordinate system
+10		GLOBAL_SURFACE_NORTH		the northwards vector of the surface
+13		GLOBAL_VESSEL_X			the x vector of the scene coordinate system according to the ship coord. system.
+16		GLOBAL_VESSEL_Y			the y vector of the scene coordinate system according to the ship coord. system
+16		GLOBAL_VESSEL_HEADING		same as above
+19		GLOBAL_VESSEL_Z			the z vector of the scene coordinate system according to the ship coord. system
+22		GLOBAL_ORBITSPEED		the orbital speed vector (speed*direction) of the ship th scene coord. system
+25		GLOBAL_SURFACESPEED		the surface speed vector (speed*direction) of the ship in scene coord. system
+28		GLOBAL_ANGULARVELOCITY		the angular velocity vector of the ship
+31		GLOBAL_ALTITUDE			the altitude of the ship, in metres. (this is not affected by vector precision)
+41		GLOBAL_VECTORACCURACY	  	the accuracy for the fixed-point vectors the computer uses to represent position and rotation. defaults to 1024.
+42		GLOBAL_RADARALT			the altitude of the craft over the terrain, in meters. (this is not affected by vector precision)
+43		GLOBAL_SPEEDACCURACY		accuracy for fixed-point vectors used for velocity. defaults to 16. if negative it is interpreted as (1/-GLOBAL_SPEEDACCURACY) when calculating the vectors. This is useful if you are traveling near, at or over the speed of light.
+
+interrupts	cause
+257		variables updated
+
+
+Numpad:
+
+address		label				verbose
+32		GLOBAL_NUMPAD_OUT		the locations for the numpad output numbers.
+36		GLOBAL_NUMPAD_MSG		the final numpad output location. functionally the same but with another label.
+37		GLOBAL_NUMPAD_IN		the numpad input location.
+38		GLOBAL_NUMPAD_NEWIN		this adress is set to 1 when use user presses enter on the numpad. must be set to 0 by a program.
+39		GLOBAL_NUMPAD_FORMAT		this adress is read to determine the format of the output. Each output area has 2 bits to determine it's format. 0 = integer, 1 = floating point. 2 & 3 are unused at the moment.
+40		--				unused
+
+interrupts	cause
+none		--
+
+
+interrupts
+
+44		GLOBAL_IADRESS			the adress the execution jumps to at interrupts, see interrupts below.
+45		GLOBAL_IENABLE			interrupt enable, see interrupts.
+
+
+Pilot control listener:
+
+The pilot control listener checks how the pilot is trying to steer the craft and sends that data to progcom.
+
+address		label				verbose
+48		GLOBAL_PILOT_THROTTLE		the pilot-entered value for the throttle. 0 is minimum, 1024 is maximum.
+49		GLOBAL_PILOT_YAW		the pilot-entered value for the yaw. -1024 is minimum, 1024 is maxium.
+50		GLOBAL_PILOT_PITCH		the pilot-entered value for the pitch. -1024 is minimum, 1024 is maxium.
+51		GLOBAL_PILOT_ROLL		the pilot-entered value for the roll. -1024 is minimum, 1024 is maxium.
+52		GLOBAL_PILOT_RCS_RIGHT		the pilot-entered value for rcs right. -1024 is minimum, 1024 is maxium.
+53		GLOBAL_PILOT_RCS_UP		the pilot-entered value for rcs up. -1024 is minimum, 1024 is maxium.
+54		GLOBAL_PILOT_RCS_FORWARD	the pilot-entered value for rcs forward. -1024 is minimum, 1024 is maxium.
+
+interrupts	cause
+none		--		
+
+
+Timer:
+
+The timer contains information on how many cycles have elapsed since a specific point in time.
+
+address		label				verbose
+59		GLOBAL_CLOCK			the computer clock. contains the complete ammount of cycles that the computer has spent turned on.
+60		GLOBAL_TIMER			the cpu:s timer is accessible at this adress. it contains the number of cycles that has elapsed since the timer last reset. can be written to and read from as normal.
+61		GLOBAL_TIMER_MAX		the value at which the timer starts over at zero. if set to 0, the timer never resets.
+
+interrupts	cause
+256		automatic timer reset
+
+
+Action group and staging manager:
+
+In order to toggle an actiongroup or activate the next stage, write a value to address 55
+the numbers you write to the slot have the following effects:
+	0: 	nothing
+	1->10: 	toggle custom action group 1->10
+	11:	toggle Abort group
+	12:	Activate next stage
+	13+:	unused
+
+address		label				verbose
+55		GLOBAL_ACTIONGROUP		Activation of actiongroups. see Misc section at the bottom of the document.
+
+interrupts	cause
+none		--
+
+
+Tape drive:
+(for a more detailed explaination of the tape drive: see tapeDrive.txt)
+
+address		label				verbose
+64		GLOBAL_TAPE_OUT
+65		GLOBAL_TAPE_IN
+66		GLOBAL_TAPE_STATUS
+67		GLOBAL_TAPE_INTERRUPT
+
+interrupts	cause
+260		notification, IBF or OBE
+261		tape drive error
+
+
+Keyboard:
+(for a more detailed explaination of the keyboard: see keyboard.txt)
+
+address		label				verbose
+68		GLOBAL_KEYBOARD			keyboard output area
+69		GLOBAL_KEYBOARD_NEWIN		set to 1 when keyboard has new input
+
+
+
+Monitor:
+(for a more detailed explaination of the monitor: see monitor.txt)
+
+address		label				verbose
+62959		GLOBAL_SCREEN_MODE		screen mode register
+62960		GLOBAL_SCREEN_COLOR		the screen data pointer
+62976		GLOBAL_SCREEN_FONT		screen color map
+63488		GLOBAL_SCREEN			font map
+
+interrupts	cause
+none		--

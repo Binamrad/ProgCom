@@ -8,6 +8,7 @@ using KSP.IO;
 //this class contains various utility functions that are needed in several places
 namespace ProgCom
 {
+
     static class Util
     {
         static System.Random rng;
@@ -48,7 +49,7 @@ namespace ProgCom
             return s;
         }
 
-        //convert a string to 32-bit packed ascii format
+        //convert a string to 32-bit packed/unpacked ascii format
         public static Int32[] strToInt32(String s, bool compactStrings)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(s);

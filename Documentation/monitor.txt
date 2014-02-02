@@ -33,20 +33,14 @@ each bit represents a pixel, 0 makes the pixel use color 0, while 1 makes it use
 the first word will set the first 32 pixels from the upper left corner, wile successive entries will set pixels right and downwards.
 
 
-NOTES:
-when using monochrome mode, be aware that the tileset is stored inside of the screen data
-if you want to do text rendering after drawing, you need to either have your own tileset
-and put the data back, or temporarily store the standard tileset.
-
-
 locations of interest:
 
-label			location	size		contents
+label			address		size		contents
 
 GLOBAL_SCREEN		63488		see above	screen data
-GLOBAL_SCREEN_COLOR	63472		16		color map
-GLOBAL_SCREEN_MODE	42		1		screen mode register
-GLOBAL_SCREEN_FONT	65024		512		font map
+GLOBAL_SCREEN_COLOR	62960		16		color map
+GLOBAL_SCREEN_MODE	62959		1		screen mode register
+GLOBAL_SCREEN_FONT	62976		512		font map
 
 detailed explaination:
 

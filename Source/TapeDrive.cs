@@ -21,66 +21,387 @@ namespace ProgCom
     //2: "read only" mode if not 0
     //3: data begins here
 
-    class TapeDrive : ASerialTransceiver
+    public class TapeDrive : PartModule, IPCHardware
     {
-        //memory manipulation variables
-        private Int32[] mem;
-        private UInt32 position;//bits!! shift right 5 for correct value.
-        private UInt32 travelToPos;//when setting, take 32* specified adress +1
-        private UInt32 toRead;
-        private Int32 cyclesPerBit;
-        private Int32 moveCycles;
-        private bool traveling;
-        //validity flags
-        private bool canRead;
-        private bool canWrite;
+        //this should probably be done with an enum
+        private const int IBF = 0;//input buffer full
+        private const int OBE = 1;//output buffer empty
+        private const int IE = 2;//interrupt enable
+        private const int BUSY = 3;//busy
+        private const int WBF = 4;//write buffer full
+        private const int RBF = 5;//read buffer full
+        private const int WRITING = 6;//writing stuff to tape
+        private const int IOB = 7;//interrupt on OBE
+        private const int NOTIFYINTERRUPT = 260;
+        private const int ERRORINTERRUPT = 261;
 
-        //sending variables
-        private Queue<Int32> sendCache;//the stuff that needs to be sent over the serial interface
-        //writing variables
-        private Queue<Int32> writeCache;//the stuff that needs to be sent over the serial interface
-        private int intsToReceive;
 
-        //tape size definitions and etc.
-        private int tapeLength = 256 * 1024;
+        UInt16 baseAddress = 64;
+        const int cyclesPerInt = 384000 / 6000;
+        int cyclesToNext = cyclesPerInt;
+        bool reading, writing, seeking;
+        bool readable, writeable;
+        int toRead = 0;
+        int toWrite = 0;
+        int seekTarget = 0;
+        int pointer = 0;
+        int cacheMaxSize = 32;
+        InterruptHandle inth;
+        int lastRec = -1;
+        int lastRecA = -1;
 
-        //receiving variables
-        public TapeDrive(Int32 clockspeed)
+        int lastCommand = -1;
+        int lasth8 = -1;
+
+        //memory area for the tape drive
+        //0: input
+        //1: output
+        //2: status
+        //3: interrupt
+        Int32[] memarea = new Int32[4];
+        LinkedList<Int32> readCache = new LinkedList<Int32>();
+        LinkedList<Int32> writeCache = new LinkedList<Int32>();
+        Int32[] tape;
+
+
+        //this function has been split off from main code for clarity
+        //it interprets a 32-bit value recived as an instruction and modifies the internal state to match
+        /* communication protocol:
+         * Receive
+         * 0: do nothing
+         * 1: read high 3 bytes of data
+         * 2: move to position indicated in high 3 bytes
+         * 3: the next high 3 bytes of data will be written to the tape
+         * 4: stop current task
+         * 5: is tape inserted?
+         * 6: is tape readable?
+         * 7: is tape writable?
+         * 8: purge read buffer
+         * 9: disable reaad buffering
+         * 10: enable read buffering
+         * 11: relative seek
+         * 12: get tape pointer
+         */
+        private void interpretInt(Int32 i)
         {
-            sendCache = new Queue<Int32>();
-            writeCache = new Queue<Int32>();
-            cyclesPerBit = clockspeed/(6000*32);
+            int high3bytes = (i >> 8) & 0xffffff;
+            i &= 0xff;
+            lasth8 = high3bytes;
+            lastCommand = i;
+            switch (i) {
+                case 0://NOP
+                    break;
+                case 1://read high 3
+                    if (getStatus(BUSY)) { busyException(); break; }
+                    reading = true;
+                    toRead = high3bytes;
+                    setStatus(BUSY, true);
+                    break;
+                case 2://seek to high 3
+                    if (getStatus(BUSY)) { busyException(); break; }
+                    seeking = true;
+                    seekTarget = high3bytes;
+                    setStatus(BUSY, true);
+                    break;
+                case 3://write high 3 to mem
+                    if (getStatus(BUSY)) { busyException(); break; }
+                    writing = true;
+                    toWrite = high3bytes;
+                    setStatus(WRITING, true);
+                    break;
+                case 4://abort current task
+                    setStatus(BUSY, false);
+                    setStatus(WRITING, false);
+                    writing = false;
+                    reading = false;
+                    seeking = false;
+                    cyclesToNext = cyclesPerInt;
+                    toWrite = 0;
+                    toRead = 0;
+                    seekTarget = pointer;
+                    break;
+                case 5://is a tape inserted?
+                    if (getStatus(BUSY)) { busyException(); break; }
+                    if (readCache.Count < cacheMaxSize) {
+                        readCache.AddFirst(tape == null ? 0 : 1);
+                    } else {
+                        //bufferOverflowException
+                        overflowException();
+                    }
+                    break;
+                case 6://is the tape readable
+                    if (getStatus(BUSY)) { busyException(); break; }
+                    if (readCache.Count < cacheMaxSize) {
+                        readCache.AddFirst(readable ? 1 : 0);
+                    } else {
+                        //bufferOverflowException
+                        overflowException();
+                    }
+                    break;
+                case 7://is tape writeable
+                    if (getStatus(BUSY)) { busyException(); break; }
+                    if (readCache.Count < cacheMaxSize) {
+                        readCache.AddFirst(writeable ? 1 : 0);
+                    } else {
+                        //bufferOverflowException
+                        overflowException();
+                    }
+                    break;
+                case 8://putge data buffers
+                    readCache.Clear();
+                    writeCache.Clear();
+                    break;
+                case 9://disable data buffering
+                    cacheMaxSize = 1;
+                    break;
+                case 10://enable data buffering
+                    cacheMaxSize = 32;
+                    break;
+                case 11:
+                    if (getStatus(BUSY)) { busyException(); break; }
+                    //sign extend parameter
+                    high3bytes <<= 8;
+                    high3bytes >>= 8;
+                    //set seek position
+                    seekTarget = pointer + high3bytes;
+                    seeking = true;
+                    break;
+                case 12:
+                    if (getStatus(BUSY)) { busyException(); break; }
+                    if (readCache.Count < cacheMaxSize) {
+                        readCache.AddFirst(pointer);
+                    } else {
+                        //bufferOverflowException
+                        overflowException();
+                    }
+                    break;
+                default:
+                    unrecognisedCommandException();
+                    break;
+            }
         }
 
-        public string getStatus()
+        private void unrecognisedCommandException()
         {
-            return "pos: " + position + " trv: " + traveling + " ttp: " + travelToPos + " sdc: " + sendCache.Count + " mvc: " + moveCycles + " trd: " + toRead + " trc: " + intsToReceive + " wch: " + writeCache.Count + " rdy: " + ready() + " crc: " + customReadyCondition() + fuckingString();
+            memarea[3] = 1;
         }
 
-        public void insertMedia(Int32[] media)
+        //called if a task is interrupted
+        private void busyException()
         {
-            if (media.Length != tapeLength) {
-                throw new FormatException("Tape length not allowed: " + media.Length + ", should be: " + (1024*256));
+            memarea[3] = 3;
+        }
+
+        //called if the data caches are being overfilled
+        private void overflowException()
+        {
+            memarea[3] = 4;
+        }
+
+        //called if we try to read from/set the pointer to an area that is outside of the tape
+        private void EOTException()
+        {
+            memarea[3] = 2;
+        }
+
+        //this should be done in-tape
+        public void insertMedia(Int32[] tape)//make this private, and make loadTape call this function
+        {
+            if (tape == null || tape.Length != 256 * 1024) throw new ArgumentException("Incorrect parameters passed to tape drive at tape initialisation");
+            this.tape = tape;
+            readable = true;
+            if (tape[2] == 0) writeable = true; else writeable = false;
+            if (tape[1] != 4711) {
+                readable = false;
+                writeable = false;
+            }
+            pointer = 3;
+        }
+
+        public void connect()
+        {
+            //do something?
+        }
+
+        public void disconnect()
+        {
+            //restore to some state or another
+        }
+
+        public Tuple<ushort, int> getSegment(int id)
+        {
+            return new Tuple<ushort, int>(64, 4);
+        }
+
+        public int getSegmentCount()
+        {
+            return 1;
+        }
+
+        public void recInterruptHandle(InterruptHandle seg)
+        {
+            inth = seg;
+        }
+
+        public int memRead(ushort position)
+        {
+            position -= baseAddress;
+            if(position == 1) setStatus(IBF, false);
+            return memarea[position];
+        }
+
+        public void memWrite(ushort position, int value)
+        {
+            lastRec = value;
+            lastRecA = position;
+            position -= baseAddress;
+            if(position == 2) {
+                memarea[2] ^= memarea[2] & 2;
+                memarea[2] |= value & 2;
+            } else if (position == 0) {
+                memarea[0] = value;
+                setStatus(OBE, false);
+            }
+        }
+
+        public void tick(int ticks)
+        {
+            handleSendRec();//send/receive stuff from the connected cpu
+            performRWS(ticks);//read/write/seek if appropriate
+            
+            //if there is data in the interrupt section, interrupt
+            if (memarea[3] != 0 && getStatus(IE)) {
+                inth.interrupt(ERRORINTERRUPT);
+            }
+            //if interrupts from things happened, stuff
+            if (getStatus(IE) && ( getStatus(IBF) || ( getStatus(IOB) && getStatus(OBE) ) )) {
+                inth.interrupt(NOTIFYINTERRUPT);
+            }
+        }
+
+        private void handleSendRec()
+        {
+            if (!getStatus(OBE)) {
+                //check if we are filling up our buffer for stuff. if so, put on buffer
+                if (toWrite > 0) {
+                    if (writeCache.Count < cacheMaxSize) {//if buffer is full, do nothing
+                        writeCache.AddFirst(memarea[0]);
+                        --toWrite;
+                        setStatus(OBE, true);
+                    }
+                } else {
+                    //if not reading, interpret int instead
+                    interpretInt(memarea[0]);
+                    setStatus(OBE, true);
+                }
             }
 
-            //remove previous flags
-            traveling = false;
-            toRead = 0;
-            travelToPos = 0;
-            position = 0;
-
-            //validity checks on media here
-            canRead = true;
-            canWrite = true;
-            if (media[1] != 4711) {
-                canRead = false;
-                canWrite = false;
-            } else if (media[2] != 0) {
-                canWrite = false;
+            //see if we should send something to the connected cpu
+            if (!getStatus(IBF) && readCache.Count > 0) {
+                memarea[1] = readCache.Last.Value;
+                readCache.RemoveLast();
+                setStatus(IBF, true);
             }
-            mem = media;
         }
 
+        private void performRWS(int ticks)
+        {
+            if (reading && readCache.Count < cacheMaxSize) {
+                cyclesToNext -= ticks;
+                if (cyclesToNext <= 0) {
+                    --toRead;
+                    readCache.AddFirst(tape[pointer++]);
+                    if (toRead == 0) {
+                        reading = false;
+                        cyclesToNext = cyclesPerInt;
+                        setStatus(BUSY, false);
+                    } else {
+                        cyclesToNext += cyclesPerInt;
+                    }
+                }
+            } else if (writing && writeCache.Count > 0) {
+                cyclesToNext -= ticks;
+                if (cyclesToNext <= 0) {
+                    --toWrite;
+                    tape[pointer++] = writeCache.Last();
+                    writeCache.RemoveLast();
+                    if (toWrite == 0) {
+                        writing = false;
+                        cyclesToNext = cyclesPerInt;
+                        setStatus(WRITING, false);
+                    } else {
+                        cyclesToNext += cyclesPerInt;
+                    }
+                }
+            } else if (seeking) {
+                cyclesToNext -= ticks << 1;//just winding the tape is twice as fast
+                if (cyclesToNext <= 0) {
+                    if (pointer < seekTarget) {
+                        ++pointer;
+                        cyclesToNext += cyclesPerInt;
+                    } else if (pointer > seekTarget) {
+                        --pointer;
+                        cyclesToNext += cyclesPerInt;
+                    } else {
+                        seeking = false;
+                        cyclesToNext = cyclesPerInt;
+                        setStatus(BUSY, false);
+                    }
+
+                }
+            }
+        }
+
+        //status table:
+        /* 0: IBF
+         * 1: OBE
+         * 2: IENABLE
+         * 3: busy
+         * 4: OCF
+         * 5: ICF
+         * */
+        private void setStatus(int statusIndex, bool status)
+        {
+            int i = 1 << statusIndex;
+            if (!status) {
+                int j = memarea[2] & i;
+                memarea[2] ^= j;
+            } else {
+                memarea[2] |= i;
+            }
+        }
+
+        private bool getStatus(int statusIndex)
+        {
+            return (memarea[2] & 1 << statusIndex) != 0;
+        }
+
+        //************************************************
+        //external stuff
+        //replace this once we get a gui for the tape drive
+        public void saveTapeInternal(String name)
+        {
+            saveTape(name, tape);
+        }
+        public void saveTape(String name, Int32[] tape)
+        {
+            //find the file and load it. Return false if it does not exist
+            //this function will call insertMedia to do the final stuff with the stuff
+            TextWriter t = TextWriter.CreateForType<TapeDrive>(name);
+            //find the last line that is non-zero
+            int index = 1024 * 256 - 1;
+            while (tape[index] == 0) {
+                --index;
+            }
+            for (int i = 0; i <= index; ++i) {
+                t.WriteLine(tape[i]);
+            }
+            t.Close();
+        }
+        public string statusString()
+        {
+            return "p: " + pointer + " tp: " + tape[pointer >= tape.Length ? tape.Length - 1 : pointer] + " wc: " + writeCache.Count + " rc: " + readCache.Count + " read " + reading + " write " + writing + " seek " + seeking + "\ntrd: " + toRead + " twr: " + toWrite + " seekto: " + seekTarget + " lr: " + lastRec + " lra: " + lastRecA + " lcmd: " + lastCommand + " lh3: " + lasth8; 
+        }
         public Int32[] loadTape(String name)
         {
             //find the file and load it. Return false if it does not exist
@@ -96,204 +417,6 @@ namespace ProgCom
             }
 
             return tape;
-        }
-
-        public void saveTapeInternal(String name)
-        {
-            saveTape(name, mem);
-        }
-        public void saveTape(String name, Int32[] tape)
-        {
-            //find the file and load it. Return false if it does not exist
-            //this function will call insertMedia to do the final stuff with the stuff
-            TextWriter t = TextWriter.CreateForType<TapeDrive>(name);
-            //find the last line that is non-zero
-            int index = 1024 * 256 - 1;
-            while (tape[index] == 0) {
-                --index;
-            }
-            for(int i = 0; i < index; ++i) {
-                t.WriteLine(tape[i]);
-            }
-            t.Close();
-        }
-
-        private Int32 read()
-        {
-            if (mem == null) {
-                return 0;
-            } else {
-                if (position < 0) {
-                    return 0;
-                } else {
-                    uint tmp = (position >> 5);
-                    if (tmp >= mem.Length) {
-                        return -1;
-                    } else return mem[tmp];
-                }
-            }
-        }
-
-        private void write(Int32 i)
-        {
-            if (mem == null) {
-                //What do I do here?
-            } else {
-                if (position < 0) {
-                    //what do I do here?
-                } else {
-                    uint tmp = (position >> 5);
-                    if (tmp >= mem.Length) {
-                        //what do I do here?
-                    } else mem[tmp] = i;
-                }
-            }
-        }
-
-        protected override bool customReadyCondition()
-        {
-            return sendCache.Count == 0 && writeCache.Count == 0 && toRead == 0 && !traveling;
-        }
-
-        protected override void serialUpdate()
-        {
-            //either transfer or read or both
-            //sending management
-            if (sendCache.Count > 0 && canSend()) {
-                send((UInt32)sendCache.Dequeue());
-            }
-            //receiving management
-            if (hasReceived()) {
-                interpretInt(getLastReceived());
-            }
-
-            //reading/writing management
-            if(traveling == true) {
-                if (position > travelToPos) {
-                    moveCycles -= 2;//when not reading, you can wind the tape at double the speed
-                } else if (position < travelToPos) {
-                    moveCycles += 2;
-                } else {
-                    traveling = false;
-                    moveCycles = 0;
-                }
-            } else if (toRead > 0) {//reading
-                if (sendCache.Count < 32) {
-                    if ((position & 0x1f) == 0x1f && moveCycles == 0) {
-                        sendCache.Enqueue(read());
-                        --toRead;
-                    }
-                    ++moveCycles;
-                }
-            } else if (writeCache.Count > 0) {//writing
-                if ((position & 0x1f) == 0x1f && moveCycles == 0) {
-                    write(writeCache.Dequeue());
-                }
-                ++moveCycles;
-            }
-
-            //update reader position
-            if (moveCycles >= cyclesPerBit) {
-                ++position;
-                moveCycles -= cyclesPerBit;
-            } else if (moveCycles <= -cyclesPerBit) {
-                --position;
-                moveCycles += cyclesPerBit;
-            }
-        }
-        //this function has been split off from main code for clarity
-        //it interprets a 32-bit value recived as an instruction and modifies the internal state to match
-        /* communication protocol:
-         * Receive
-         * 0: do nothing
-         * 1: move to high 3 bytes
-         * 2: read high 3 bytes data
-         * 3: stop reading
-         * 4: purge cached data
-         * 5: set pointer to 0
-         * 6: set pointer to argument
-         * 7: is tape writable?
-         * 8: is tape readable?
-         * 9: tape inserted?
-         * 10: write next high 3 bytes of data to memory
-         */
-        private void interpretInt(Int32 i)
-        {
-            if (intsToReceive > 0) {
-                if (writeCache.Count < 32) {
-                    writeCache.Enqueue(i);
-                }
-                --intsToReceive;
-                return;
-            }
-
-            int inst = i & 255;
-            int argument = i >> 8;
-            argument = argument & 0x00ffffff;
-            switch (inst) {
-                case 0:
-                    break;
-                case 1:
-                    if (mem != null) {
-                        traveling = true;
-                        travelToPos = (UInt32)(argument * 32);
-                    }
-                    break;
-                case 2:
-                    if (canRead) {
-                        toRead = (UInt32)argument;
-                    }
-                    break;
-                case 3:
-                    toRead = 0;
-                    break;
-                case 4:
-                    sendCache = new Queue<Int32>();
-                    break;
-                case 5:
-                    if (mem != null) {
-                        traveling = true;
-                        travelToPos = 0;
-                    }
-                    break;
-                case 6:
-                    if (mem != null) {
-                        traveling = true;
-                        travelToPos = (UInt32)argument;
-                    }
-                    break;
-                case 7:
-                    //send boolean value, is tape inserted & valid & in non-read-only mode
-                    if (canWrite) {
-                        sendCache.Enqueue(1);
-                    } else {
-                        sendCache.Enqueue(0);
-                    }
-                    break;
-                case 8:
-                    //send boolean value, is tape valid and inserted
-                    if (canRead) {
-                        sendCache.Enqueue(1);
-                    } else {
-                        sendCache.Enqueue(0);
-                    }
-                    break;
-                case 9:
-                    //is tape inserted?
-                    if (mem != null && canRead) {
-                        sendCache.Enqueue(1);
-                    } else {
-                        sendCache.Enqueue(0);
-                    }
-                    break;
-                case 10:
-                    if (canWrite) {
-                        intsToReceive = argument;
-                    }
-                    break;
-                default:
-                    break;
-            }
         }
     }
 }

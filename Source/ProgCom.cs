@@ -10,39 +10,26 @@ namespace ProgCom
     //runs a simulated version of an imaginary processor.
     /*
      * TODO:
-     * rethink how program loading should be done <- boot from tape. Fix if complaints
-     * insert boot sequence upon init <- done
-     * insert assembled program into tape <- done
-     * #literal <- done?
-     * fix bit-shift EX zero if shifted 0, full to-EX copy otherwise <- done
-     * add possibility to specify load location for programs when assembled <- done
-     * Finally update to goddamn partModule so that we can add the mod normally <- done-ish
-     * link to 0.21.1 <- done
-     * rle-compress tapes <- done
-     * messages when inserting tapes <- done
-     * save tapes <- done?
-     * fix weirdness with gui objects
-     * overhaul cache memory <- postpone
-     * add additional instructions; additional partial moves and cache bypass <-postpone
-     * fix window ids <- done?
-     * improve interrupts <- done
-     * make sure TapeDrive respects canread/canwrite flags <- done
-     * text offset registers <- postpone
-     * documentation
+     * move interrupts/numpad to new hardware interface <- done/wait
+     * add additional instructions; additional partial moves and other things <-done/wait
+     * additional peripherals: radar altitudimeter, target relative position etc. <- done/wait
+     * overhaul cache memory <- done
+     * improve keyboard interface <- done?
+     * make sure "interrupts enabled" and "interrupt processing" are separated <- done?
+     * fix weirdness with gui objects <- wait
+     * screen drawing interrupts <- wait
+     * text offset registers <- wait
+     * more comparison instructions <- wait
+     * memory management <- wait
      */
-    public class ProgCom : PartModule, ISerialConnector
+    public class ProgCom : PartModule
     {
         private CPUem CPU;
-        //int lastLoaded = 128;//the earliest memory sequence anything can be safely loaded to
-        private bool controlling = false;
-        bool ttlControl = false;
         private bool running = false;
         Assembler2 assembler;
-        private bool partGUI = false;
         private bool partActive = false;
-        Monitor monitor;
+        private bool partGUI;
         bool debug;
-        Keyboard keyb;
         TapeDrive tapeDrive;
 
         /************************************************************************************************************************/
@@ -61,61 +48,8 @@ namespace ProgCom
             }
             return false;
         }
-
-        private void updateFlightVariables()
-        {
-            //update the variables which describe the vessels location
-
-            //position of the ship's center of mass:
-            Vector3d position = vessel.findWorldCenterOfMass();//somewhat useless for anything other than as a parameter
-            double altitude = vessel.mainBody.GetAltitude(position);
-
-            //unit vectors in the up (normal to planet surface), east, and north (parallel to planet surface) directions
-            Vector3d eastUnit = vessel.mainBody.getRFrmVel(position).normalized; //uses the rotation of the body's frame to determine "east"
-            Vector3d upUnit = (position - vessel.mainBody.position).normalized;
-            Vector3d northUnit = Vector3d.Cross(upUnit, eastUnit); //north = up cross east
-
-            //vessel speeds
-            Vector3d orbitalSpeed = vessel.orbit.GetVel();
-            Vector3d groundSpeed = orbitalSpeed - vessel.mainBody.getRFrmVel(position);
-
-            //local acceleration vector due to gravity:
-            Vector3d geeAcceleration = FlightGlobals.getGeeForceAtPosition(position);
-
-            //find angular velocity (roll rate, yaw rate, pitch rate)
-            Vector3d angularVelocity = (Vector3d)vessel.transform.InverseTransformDirection(vessel.rigidbody.angularVelocity);
-
-            //find ship coordinate system
-            UnityEngine.Vector3 tmpVector = new UnityEngine.Vector3(1, 0, 0);
-            Vector3d shipEastVector = (Vector3d)vessel.transform.TransformDirection(tmpVector);
-            tmpVector.x = 0;
-            tmpVector.y = 1;
-            Vector3d shipUpVector = (Vector3d)vessel.transform.TransformDirection(tmpVector);
-            tmpVector.y = 0;
-            tmpVector.z = 1;
-            Vector3d shipNorthVector = -(Vector3d)vessel.transform.TransformDirection(tmpVector);
-            //figure out what these newfangled vector3d doodads do
-            /*
-            print("***************************************************");
-            print("geeAccelleration: " + (UnityEngine.Vector3)geeAcceleration);
-            print("altitude: " + altitude);
-            print("eastUnit: " + (UnityEngine.Vector3)eastUnit);
-            print("upUnit: " + (UnityEngine.Vector3)upUnit);
-            print("northUnit: " + (UnityEngine.Vector3)northUnit);
-            print("orbitalSpeed: " + (UnityEngine.Vector3)orbitalSpeed);
-            print("groundSpeed: " + (UnityEngine.Vector3)groundSpeed);
-            print("heading: " + (UnityEngine.Vector3)shipUpVector);
-            print("angularveclocity: " + (UnityEngine.Vector3)angularVelocity);
-            print("shipEast: " + (UnityEngine.Vector3)shipEastVector);
-            print("shipUp: " + (UnityEngine.Vector3)shipUpVector);
-            print("shipNorth: " + (UnityEngine.Vector3)shipNorthVector);
-            print("***************************************************");
-            */
-            Int32[] mem = CPU.Memory;
-            int accuracy = mem[41];//vector accuracy
-            float speedAccuracy = mem[43] >= 0 ? (float)mem[43] : 1.0f/((float)-mem[43]);//speed accuracy
-            //int speedAccuracy = 16;//old speedaccuracy model
-
+        
+        /*
             mem[4] = (Int32)(eastUnit.x * accuracy);
             mem[5] = (Int32)(eastUnit.y * accuracy);
             mem[6] = (Int32)(eastUnit.z * accuracy);
@@ -154,8 +88,8 @@ namespace ProgCom
             //mem[39] = output formatting switch
             //mem[40] = timer
             //mem[41] = vectorAccuracy
-            //mem[42] = thread id
-            //mem[43] = program offset
+            //mem[42] = screen mode
+            //mem[43] = speed accuracy
             //mem[44] = interrupt enable
             //mem[45] = clock
             //mem[46] = interrupt handler adress (64 default)
@@ -168,8 +102,7 @@ namespace ProgCom
             //mem[53] = player trn east
             //mem[54] = player trn forward
             //mem[55] = toggle Actiongroups
-        }
-
+        */
         //runs through the instructions untill the necessary ammount of ticks has passed, or all programs have completed operation
         //returns the excess ticks
         private int cycle(int cycles)
@@ -178,13 +111,17 @@ namespace ProgCom
             while (ticksElapsed < cycles) {
                 //debugging tools
                 if (debug) {
-                    print("PC: " + CPU.PC + "current instruction: " + CPU.Memory[CPU.PC] + " ra: " + CPU.Registers[15] + " sp: " + CPU.Registers[14] + ", " + CPU.Memory[(UInt16)(CPU.Registers[14] - 1)]);
-                    print(tapeDrive.getStatus());
-                    print("r1: " + CPU.Registers[1]);
+                    int opcode = (CPU.getMem(CPU.PC) >> 26)&0x3f;//decompile instruction
+                    int rA = (CPU.getMem(CPU.PC) >> 21) & 0x1f;
+                    int rB = (CPU.getMem(CPU.PC) >> 16) & 0x1f;
+                    int im = CPU.getMem(CPU.PC) & 0xffff;
+
+                    print("PC: " + CPU.PC + " opcode: " + opcode.ToString("X2") + " r" + rA + ": " + CPU.Registers[rA] + " r" + rB + ": " + CPU.Registers[rB] + " im: " + im + " rC: " + CPU.Registers[im&0x1f] + " ra: " + CPU.Registers[15] + " sp: " + CPU.Registers[14] + ", " + CPU.getMem((UInt16)(CPU.Registers[14] - 1)));
+                    print(tapeDrive.statusString());
                 }
-                //print("PC: " + CPU.PC + "current instruction: " + CPU.Memory[CPU.PC] + " EX: " + CPU.getEX());
+                
                 int cyclesElapsed = CPU.tick();
-                if (cyclesElapsed == 0) {
+                /*if (cyclesElapsed == 0) {//remove this sometime
                     running = false;
                     //stop the program
                     break;
@@ -194,7 +131,7 @@ namespace ProgCom
                     print("Illegal instruction(" + CPU.Memory[CPU.PC - 1] + ") at address " + (CPU.PC - 1));
                     running = false;
                     break;
-                }
+                }*/
                 ticksElapsed += cyclesElapsed;
             }
             return ticksElapsed;
@@ -205,9 +142,12 @@ namespace ProgCom
             Int32[] code = assembler.assemble(s, loadLocation);
             Int32[] newCode = new Int32[1024 * 256];
             newCode[1] = 4711;
+            newCode[3] = 1024;
+            newCode[1024] = loadLocation;
+            newCode[1025] = code.Length;
             int j = 0;
             foreach (Int32 i in code) {
-                newCode[j + 3] = i;
+                newCode[j + 1026] = i;
                 ++j;
             }
             return newCode;
@@ -225,39 +165,17 @@ namespace ProgCom
             //assemble a program
             Int32[] tape = loadAndMakeTape(s, loadLocation);
             consoleWrite("Program assembled!");
+            //save tape
+            tapeDrive.saveTape(Util.cutStrAfter(s, ".") + ".pct", tape);
+            consoleWrite("Tape created.");
             //load program into memory
             if (loadTape) {
                 tapeDrive.insertMedia(tape);
                 consoleWrite("Tape inserted.");
-            } else {
-                //write to a file
-                tapeDrive.saveTape(Util.cutStrAfter(s, ".") + ".pct", tape);
-                consoleWrite("Tape created.");
             }
 
             consoleWrite("Done");
             return 0;
-            /*
-            consoleWrite("Loading file: \"" + s + "\"...");
-            //assemble a program
-            Int32[] newCode = assembler.assemble(s, lastLoaded);
-            int loadLocation = lastLoaded;
-            consoleWrite("Program assembled!");
-            //load program into memory
-            consoleWrite("writing...");
-            for (int i = 0; i < newCode.Length; ++i) {
-                if (lastLoaded > 65535) {
-                    consoleWrite("ERROR: program loader wrote out of bounds");
-                    lastLoaded = loadLocation;
-                    throw new OutOfMemoryException("Loader wrote out of bounds");
-                }
-                CPU.Memory[lastLoaded++] = newCode[i];
-            }
-            consoleWrite("Program loaded at " + loadLocation);
-
-            consoleWrite("Done");
-            return loadLocation;
-             * */
         }
 
         protected int loadWrapper(String s, bool loadTape, int loadLocation)
@@ -281,50 +199,6 @@ namespace ProgCom
             }
         }
 
-        protected void activateActionGroup(int i)
-        {
-            ActionGroupList a = this.vessel.ActionGroups;
-            switch (i) {
-                case 1:
-                    a.ToggleGroup(KSPActionGroup.Custom01);
-                    break;
-                case 2:
-                    a.ToggleGroup(KSPActionGroup.Custom02);
-                    break;
-                case 3:
-                    a.ToggleGroup(KSPActionGroup.Custom03);
-                    break;
-                case 4:
-                    a.ToggleGroup(KSPActionGroup.Custom04);
-                    break;
-                case 5:
-                    a.ToggleGroup(KSPActionGroup.Custom05);
-                    break;
-                case 6:
-                    a.ToggleGroup(KSPActionGroup.Custom06);
-                    break;
-                case 7:
-                    a.ToggleGroup(KSPActionGroup.Custom07);
-                    break;
-                case 8:
-                    a.ToggleGroup(KSPActionGroup.Custom08);
-                    break;
-                case 9:
-                    a.ToggleGroup(KSPActionGroup.Custom09);
-                    break;
-                case 10:
-                    a.ToggleGroup(KSPActionGroup.Custom10);
-                    break;
-                case 11:
-                    a.ToggleGroup(KSPActionGroup.Abort);
-                    break;
-                case 12:
-                    if (Staging.CurrentStage > 0) {
-                        Staging.ActivateNextStage();
-                    }
-                    break;
-            }
-        }
 
         /***************************************************************************************************************************/
         //below this point, various override methods for part are declared.
@@ -340,14 +214,11 @@ namespace ProgCom
             if (!shipHasOtherActiveComputer()) {
                 print("ProgCom initialised!");
                 partActive = true;
-                //vessel.OnFlyByWire += new FlightInputCallback(performManouvers);
-                vessel.OnFlyByWire += performManouvers;
+                
                 //add the gui iff the vessel is the active vessel.
                 if (this.vessel.isActiveVessel) {
                     partGUI = true;
-                    RenderingManager.AddToPostDrawQueue(3, new Callback(monitor.draw));
                     RenderingManager.AddToPostDrawQueue(3, new Callback(drawGUI));//start the GUI
-                    RenderingManager.AddToPostDrawQueue(3, new Callback(keyb.draw));//start the keyboard
                 }
             }
         }
@@ -378,172 +249,63 @@ namespace ProgCom
             }
         }
         */
-        private void removeExternalGUI()
-        {
-            if (partActive) {
-                //remove manouver-stuff when the part is destroyed
-                if (this.vessel.isActiveVessel) {
-                    if (monitor != null) {
-                        RenderingManager.RemoveFromPostDrawQueue(3, new Callback(monitor.draw));
-                        RenderingManager.RemoveFromPostDrawQueue(3, new Callback(keyb.draw));//start the keyboard
-                    }
-                }
-            }
-        }
-        private void initExternalGUI()
-        {
-            if (partActive) {
-                //remove manouver-stuff when the part is destroyed
-                if (this.vessel.isActiveVessel) {
-                    if (monitor != null) {
-                        RenderingManager.AddToPostDrawQueue(3, new Callback(monitor.draw));
-                        RenderingManager.AddToPostDrawQueue(3, new Callback(keyb.draw));//start the keyboard
-                    }
-                }
-            }
-        }
 
         private void init()
         {
+            print("PROGCOM INITIALISING");
             //initialise cpu-emulator
             //lastLoaded = 128;
             CPU = new CPUem();
 
             windowID = Util.random();
-            removeExternalGUI();
-            monitor = new Monitor(CPU.Memory, 63488, 65024, 63472, 42);
-            keyb = new Keyboard();
-            initExternalGUI();
 
             if (tapeDrive == null) {
-                tapeDrive = new TapeDrive(CPU.ClockRate);
+                tapeDrive = new TapeDrive();
                 //insert a blank tape
                 Int32[] media = new Int32[256 * 1024];
                 media[1] = 4711;
                 tapeDrive.insertMedia(media);
             }
+            //connect various peripherals to the CPU
+            //when possible, separate these out as normal partmodules
 
-            //connect keyboard to serial port
-            connect(keyb, 1);
-            //connect tapedrive to serial port
-            connect(tapeDrive, 0);
-            
+            //connect tapedrive. When possible, add tape drive to appropriate stuff
+            CPU.hwConnect(tapeDrive);
+
             running = false;
-            //init default values in memory
-            CPU.Memory[41] = 1024;//init vector precision
-            CPU.Memory[43] = 16;//default speed precision
-            int i = 65024;
-            foreach (UInt32 font in monitor.getDefaultFont()) {
-                CPU.Memory[i] = (Int32)font;
-                ++i;
-            }
-            i = 63472;
-            foreach (Int32 col in monitor.getDefaultColors()) {
-                CPU.Memory[i] = col;
-                ++i;
-            }
-            //boot loader
-            Int32[] bootldr = {
-                                  -1073741824,
-                                  -1073741824,
-                                  -532676599,
-                                  -1207959536,
-                                  -1207959531,
-                                  -1608450052,
-                                  -532675839,
-                                  -1207959540,
-                                  -532671486,
-                                  -1207959542,
-                                  608174100,
-                                  -1207959538,
-                                  -1541406717,
-                                  -532676605,
-                                  -1207959547,
-                                  -1610547214,
-                                  -333315948,
-                                  541196289,
-                                  -1405026312,
-                                  -1610612724,
-                                  -400555968,
-                                  807469096,
-                                  606142496,
-                                  -1543372804,
-                                  -331349950,
-                                  -2013265905,
-                                  -400555968,
-                                  807469060,
-                                  -1608450051,
-                                  -400555967,
-                                  -335544256,
-                                  -2013265905
-                              };
-            for (int ldr = 0; ldr < bootldr.Length; ++ldr) {
-                CPU.Memory[ldr + 96] = bootldr[ldr];
+            
+            //connect all hardware on this part
+            foreach (PartModule pm in this.part.Modules) {
+                if (pm == this) continue;
+                if (pm is IPCHardware) {
+                    print("HARDWARE IS FOUND");
+                    try {
+                        CPU.hwConnect((IPCHardware)pm);
+                    }
+                    catch (ArgumentException e) {
+                        consoleWrite("Error when connecting hardware:");
+                        consoleWrite(e.Message);
+                    }
+                }
             }
 
+            //make sure all partmodules can read the gui state
+            foreach (PartModule pm in this.part.Modules) {
+                if (pm == this) continue;
+                if (pm is PCGUIListener) {
+                    print("GUIListener found!");
+                    try {
+                        ((PCGUIListener)pm).recGUIState(GUIstate);
+                    }
+                    catch (Exception e) {
+                        consoleWrite("Error when connecting gui:");
+                        consoleWrite(e.Message);
+                    }
+                }
+            }
 
             //initialise the assembler
-            assembler = CPU.getCompatibleAssembler();
-            assembler.bindGlobalCall("GLOBAL_MAINTHROTTLE", 0);//init all globaly shared memory positions
-            assembler.bindGlobalCall("GLOBAL_YAW", 1);
-            assembler.bindGlobalCall("GLOBAL_PITCH", 2);
-            assembler.bindGlobalCall("GLOBAL_ROLL", 3);
-            assembler.bindGlobalCall("GLOBAL_SURFACE_EAST", 4);
-            assembler.bindGlobalCall("GLOBAL_SURFACE_UP", 7);
-            assembler.bindGlobalCall("GLOBAL_SURFACE_NORTH", 10);
-            assembler.bindGlobalCall("GLOBAL_VESSEL_X", 13);
-            assembler.bindGlobalCall("GLOBAL_VESSEL_Y", 16);
-            assembler.bindGlobalCall("GLOBAL_VESSEL_HEADING", 16);//ALTERNATE
-            assembler.bindGlobalCall("GLOBAL_VESSEL_Z", 19);
-            assembler.bindGlobalCall("GLOBAL_ORBITSPEED", 22);
-            assembler.bindGlobalCall("GLOBAL_SURFACESPEED", 25);
-            assembler.bindGlobalCall("GLOBAL_ANGULARVELOCITY", 28);
-            assembler.bindGlobalCall("GLOBAL_ALTITUDE", 31);
-            assembler.bindGlobalCall("GLOBAL_NUMPAD_OUT", 32);
-            assembler.bindGlobalCall("GLOBAL_NUMPAD_MSG", 36);
-            assembler.bindGlobalCall("GLOBAL_NUMPAD_IN", 37);
-            assembler.bindGlobalCall("GLOBAL_NUMPAD_NEWIN", 38);
-            assembler.bindGlobalCall("GLOBAL_NUMPAD_FORMAT", 39);
-            assembler.bindGlobalCall("GLOBAL_TIMER", 40);
-            assembler.bindGlobalCall("GLOBAL_VECTORACCURACY", 41);
-            assembler.bindGlobalCall("GLOBAL_SCREEN_MODE", 42);
-            assembler.bindGlobalCall("GLOBAL_SPEEDACCURACY", 43);
-            assembler.bindGlobalCall("GLOBAL_IENABLE", 44);
-            assembler.bindGlobalCall("GLOBAL_CLOCK", 45);
-            assembler.bindGlobalCall("GLOBAL_IADRESS", 46);
-            assembler.bindGlobalCall("GLOBAL_TIMER_MAX", 47);
-            assembler.bindGlobalCall("GLOBAL_PILOT_THROTTLE", 48);
-            assembler.bindGlobalCall("GLOBAL_PILOT_YAW", 49);
-            assembler.bindGlobalCall("GLOBAL_PILOT_PITCH", 50);
-            assembler.bindGlobalCall("GLOBAL_PILOT_ROLL", 51);
-            assembler.bindGlobalCall("GLOBAL_PILOT_RCS_RIGHT", 52);
-            assembler.bindGlobalCall("GLOBAL_PILOT_RCS_UP", 53);
-            assembler.bindGlobalCall("GLOBAL_PILOT_RCS_FORWARD", 54);
-            assembler.bindGlobalCall("GLOBAL_RCS_RIGHT", 52);
-            assembler.bindGlobalCall("GLOBAL_RCS_UP", 53);
-            assembler.bindGlobalCall("GLOBAL_RCS_FORWARD", 54);
-            assembler.bindGlobalCall("GLOBAL_ACTIONGROUP", 55);
-
-            //serial buses
-            assembler.bindGlobalCall("GLOBAL_GSB0", 64);
-            assembler.bindGlobalCall("GLOBAL_GSB1", 68);
-            assembler.bindGlobalCall("GLOBAL_GSB2", 72);
-            assembler.bindGlobalCall("GLOBAL_GSB3", 76);
-            assembler.bindGlobalCall("GLOBAL_GSB4", 80);
-            assembler.bindGlobalCall("GLOBAL_GSB5", 84);
-            assembler.bindGlobalCall("GLOBAL_GSB6", 88);
-            assembler.bindGlobalCall("GLOBAL_GSB7", 92);
-
-            //monitor stuff
-            assembler.bindGlobalCall("GLOBAL_SCREEN", 63488);
-            assembler.bindGlobalCall("GLOBAL_SCREEN_COLOR", 63472);
-            assembler.bindGlobalCall("GLOBAL_SCREEN_FONT", 65024);
-
-            //other stuff
-            assembler.bindGlobalCall("CPU_CLOCKRATE", CPU.ClockRate);
-            assembler.bindGlobalCall("CPU_RAM", CPU.Memory.Length);
-            assembler.bindGlobalCall("CPU_MAXADDRESS", CPU.Memory.Length-1);
-
+            assembler = new Assembler2();
         }
 
         //rect initialized here
@@ -564,90 +326,19 @@ namespace ProgCom
             consoleWrite("Computer online!");
         }
 
-        //set the ship controlls to whatever the computer has decided them to be, if the part is set to do so
-        private void performManouvers(FlightCtrlState state)
-        {
-            //ActionGroupList a = this.vessel.ActionGroups;
-            //a.SetGroup(KSPActionGroup.
-            //in order to make sure we capture the player controls, we read the controls here
-            //mem[48] = player throttle
-            CPU.Memory[48] = (Int32)(state.mainThrottle * 1024.0);
-            //mem[49] = player yaw
-            CPU.Memory[49] = (Int32)(state.yaw * 1024.0);
-            //mem[50] = player pitch
-            CPU.Memory[50] = (Int32)(state.pitch * 1024.0);
-            //mem[51] = player roll
-            CPU.Memory[51] = (Int32)(state.roll * 1024.0);
-            //mem[52] = player trn right
-            CPU.Memory[52] = (Int32)(state.X * 1024);
-            //mem[53] = player trn up
-            CPU.Memory[53] = (Int32)(state.Y * 1024);
-            //mem[54] = player trn forward
-            CPU.Memory[54] = (Int32)(state.Z * 1024);
-
-
-            if (running) {
-                //set controlls to value in appropriate memory location
-                float f;
-                if (ttlControl) {
-                    f = (float)CPU.Memory[0];
-                    f /= 1024.0F;
-                    state.mainThrottle = f; //set throttle to computer-specified value
-
-
-                    //the range of throttle is 0.0F to 1.0F
-                    //we clamp the values to make sure they are in range
-                    state.mainThrottle = Mathf.Clamp(state.mainThrottle, 0.0F, +1.0F);
-                }
-
-                if (controlling) {
-                    //if the user has specified it, activate a control stage
-                    if (CPU.Memory[55] != 0) {
-                        activateActionGroup(CPU.Memory[55]);
-                        CPU.Memory[55] = 0;
-                    }
-
-
-                    f = (float)CPU.Memory[1];
-                    f /= 1024.0F;
-                    state.yaw = f; //set yaw to computer-specified value
-
-                    f = (float)CPU.Memory[2];
-                    f /= 1024.0F;
-                    state.pitch = f; //set pitch to computer-specified value
-
-                    f = (float)CPU.Memory[3];
-                    f /= 1024.0F;
-                    state.roll = f; //set roll to computer-specified value */
-
-                    //add control for translation.
-                    f = (float)CPU.Memory[52];
-                    f /= 1024.0F;
-                    state.X = f;
-                    f = (float)CPU.Memory[53];
-                    f /= 1024.0F;
-                    state.Y = f;
-                    f = (float)CPU.Memory[54];
-                    f /= 1024.0F;
-                    state.Z = f;
-
-
-                    //the range of yaw, pitch, and roll is -1.0F to 1.0F, as are X, Y and Z
-                    //we clamp the values to make sure they are in range
-                    state.yaw = Mathf.Clamp(state.yaw, -1.0F, +1.0F);
-                    state.pitch = Mathf.Clamp(state.pitch, -1.0F, +1.0F);
-                    state.roll = Mathf.Clamp(state.roll, -1.0F, +1.0F);
-                    state.X = Mathf.Clamp(state.X, -1.0F, +1.0F);
-                    state.Y = Mathf.Clamp(state.Y, -1.0F, +1.0F);
-                    state.Z = Mathf.Clamp(state.Z, -1.0F, +1.0F);
-                }
-            }
-        }
-
+        
         private int cyclesPending = 0;
         //perform CPU cycling and the like here
         public override void OnUpdate()
         {
+            if (CPU.hasErrors) {
+                CPU.hasErrors = false;
+                foreach (String s in CPU.errorMessages) {
+                    print(s);
+                    CPU.errorMessages.Clear();
+                }
+            }
+
             base.OnUpdate();
 
             //we must make sure that, if the vessel is gains or loses focus, that the gui responds accordingly
@@ -655,49 +346,39 @@ namespace ProgCom
                 partGUI = false;
 
                 RenderingManager.RemoveFromPostDrawQueue(3, new Callback(drawGUI)); //close the GUI
-                RenderingManager.RemoveFromPostDrawQueue(3, new Callback(monitor.draw));
-                RenderingManager.RemoveFromPostDrawQueue(3, new Callback(keyb.draw));//start the keyboard
             } else if (partGUI == false && vessel.isActiveVessel && !shipHasOtherActiveComputer()) {
                 partGUI = true;
 
                 RenderingManager.AddToPostDrawQueue(3, new Callback(drawGUI));//start the GUI
-                RenderingManager.AddToPostDrawQueue(3, new Callback(monitor.draw));
-                RenderingManager.AddToPostDrawQueue(3, new Callback(keyb.draw));//start the keyboard
             }
             //handle other computers suddenly appearing on the ship, such as when docking
             if (partActive && shipHasOtherActiveComputer()) {
                 partActive = false;
-                vessel.OnFlyByWire -= new FlightInputCallback(performManouvers);//remove autopilot stuff
+                GUIstate.ctl = false;
+                GUIstate.ttl = false;
             } else if (!partActive && !shipHasOtherActiveComputer()) {
                 partActive = true;
-                vessel.OnFlyByWire += new FlightInputCallback(performManouvers);//add autopilot stuff
             }
 
 
             //update computer and flight data
             if (running) {
-                updateFlightVariables();//make sure all the flight data is the most recent.
+                //updateFlightVariables();//make sure all the flight data is the most recent.
                 //handle exceptions for hardware that is not handled internally in the CPU
-                if (CPU.enabledInterruptNum(2)) {
-                    CPU.spawnException(257);
-                }
-                if (CPU.Memory[38] != 0 && CPU.enabledInterruptNum(3)) {
-                    CPU.spawnException(259);
-                }
                 float time = UnityEngine.Time.deltaTime;
                 cyclesPending += debug ? 1 : (int)(time * CPU.ClockRate);
                 if (cyclesPending > CPU.ClockRate) {
                     cyclesPending = CPU.ClockRate;//to prevent lockup bugs due to ever-esclalating clock-cycles per update
                 }
                 cyclesPending -= cycle(cyclesPending);//Run as many cycles as we can, while correcting for instructions that might run for longer than allowed
-                monitor.update();//draw the screen
             }
         }
 
 
         /***********************' GUI code here ****************************/
 
-        bool showGUI = true;
+        //bool showGUI = true;
+        GUIStates GUIstate = new GUIStates();
         int numpadInput = 0;
         String currentText = "";
         int consoleMax = -1;
@@ -726,38 +407,38 @@ namespace ProgCom
                 {
                 running = !running;//toggle on/off
             }
-            if (GUILayout.Button("CTL", controlling ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            if (GUILayout.Button("CTL", GUIstate.ctl ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                 {
-                controlling = !controlling;//toggle on/off
+                GUIstate.ctl = !GUIstate.ctl;//toggle on/off
             }
-            if (GUILayout.Button("TTL", ttlControl ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            if (GUILayout.Button("TTL", GUIstate.ttl ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                 {
-                ttlControl = !ttlControl;//toggle on/off
+                GUIstate.ttl = !GUIstate.ttl;//toggle on/off
             }
             if (GUILayout.Button("RST", mySty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                 {
                 init();
             }
-            if (GUILayout.Button("GUI", showGUI ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            if (GUILayout.Button("GUI", GUIstate.gui ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                 {
-                showGUI = !showGUI;//toggle on/off
+                GUIstate.gui = !GUIstate.gui;//toggle on/off
                 windowPos.width = 0;
                 windowPos.height = 0;
             }
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
 
-            if (showGUI) {
+            if (GUIstate.gui) {
                 //second row of buttons
                 GUILayout.BeginVertical();
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("MON", monitor.visible ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+                if (GUILayout.Button("MON", GUIstate.mon ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                     {
-                    monitor.visible = !monitor.visible;//toggle on/off
+                    GUIstate.mon = !GUIstate.mon;//toggle on/off
                 }
-                if (GUILayout.Button("KBD", keyb.visible ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+                if (GUILayout.Button("KBD", GUIstate.kbd ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                     {
-                    keyb.visible = !keyb.visible;//toggle on/off
+                    GUIstate.kbd = !GUIstate.kbd;//toggle on/off
                 }
                 GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
@@ -930,7 +611,7 @@ namespace ProgCom
                             }
                         }
                     } else if(S[0].Equals("asm")) {
-                        loadWrapper(S[1], false, 128);
+                        loadWrapper(S[1], false, 256);
                     } else if (S[0].Equals("eject")) {
                         if (!S[1].Equals("null")) {//If this is the case, just throw away the tape (and insert an empty one?)
                             //save the tape (and insert empty?)
@@ -940,7 +621,7 @@ namespace ProgCom
                                 tapeDrive.saveTapeInternal(S[1]+".pct");
                             }
                         }
-                        Int32[] media = new Int32[1024 * 256];
+                        Int32[] media = new Int32[1024 * 256];//this should possibly be null instead
                         media[1] = 4711;
                         tapeDrive.insertMedia(media);
 
@@ -956,7 +637,7 @@ namespace ProgCom
                     } else if (S[0].Equals("print")) {
                         if (Util.tryParseTo<UInt16>(S[1], out tmp)) {
                             for (int i = 0; i < 100; ++i) {
-                                print(CPU.Memory[i + tmp]);
+                                print(CPU.getMem((UInt16)(i + tmp)));
                             }
                         } else {
                             consoleWrite("not an address: " + S[1]);
@@ -967,7 +648,7 @@ namespace ProgCom
                     if(S[0].Equals("insert")) {
                         if(S[1].Equals("asm")) {
                             //assemble some code and then stuff
-                            loadWrapper(S[2], true, 128);
+                            loadWrapper(S[2], true, 256);
                         }
                     } else consoleWrite("Couldn't parse.");
                     break;
@@ -1021,20 +702,5 @@ namespace ProgCom
             windowPos.height = 0;
         }
 
-        /**************************External interaction stuff*****************/
-        
-        //connect an interface to a slot
-        public void connect(ISerial toConnect, int slot)
-        {
-            CPU.SerialInterfaces[slot].disconnect();
-            CPU.SerialInterfaces[slot].connect(toConnect);
-            toConnect.connect(CPU.SerialInterfaces[slot]); 
-        }
-
-        //see if the slot is connected to something
-        public bool slotOccupied(int slot)
-        {
-            return CPU.SerialInterfaces[slot].isOccupied();
-        }
     }
 }

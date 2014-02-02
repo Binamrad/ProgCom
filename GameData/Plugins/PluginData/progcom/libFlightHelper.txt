@@ -1,7 +1,7 @@
-;for a runnable program, see the "navigator.txt" file
+;for a runnable program, see the "lander.txt" file
 
-;will hold the vertical speed
-;very expensive operation
+;will hold the vertical speed by oscillating the throttle between 0 and 1024, depending on if the craft is above of below the target speed
+;the function will have to be called about once per frame
 ;parameters: prefered speed in r1
 .text
 #global libfh_holdVertSpeed

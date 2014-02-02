@@ -1,9 +1,6 @@
-when a key is pressed the keycode is sent over the serial connection the keyboard is connected to (DEFAULT: 1)
-for communication protocoll, see serialbus.txt in the documentation
-
+When a key is pressed, the ascii value of that key is sent to the cpu unless otherwise specified
 When a key is released the negative key code is sent.
 for example, if a key gives code 64 when pressed, it gives -64 when released
-unless otherwise specified, all keys with an ASCII representation sends their ascii values when pressed
 
 Key values:
 ENTER:		10
@@ -23,3 +20,13 @@ UP:		273
 DOWN:		274
 RIGHT:		275
 LEFT:		276
+
+
+memory addresses:
+
+address		label			verbose
+68		GLOBAL_KEYBOARD 	keyboard output area
+69		GLOBAL_KEYBOARD_NEWIN	set to 1 when the keyboard has sent something to the computer
+
+interrupts	cause
+none		--

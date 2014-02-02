@@ -1,0 +1,135 @@
+;Define an ascii table
+.text
+;control characters
+#define C_NUL 0;null
+#define C_SOH 1;start of header
+#define C_STX 2;start of text
+#define C_ETX 3;end of text
+#define C_EOT 4;end of transmission
+#define C_ENQ 5;enquiry
+#define C_ACK 6;acknowledge
+#define C_BEL 7;bell
+#define C_BS  8;backspace
+#define C_TAB 9;horizontal tab
+#define C_LF  10;line feed
+#define C_VT  11;vertical tab
+#define C_FF  12;form feed
+#define C_CR  13;carrige return
+#define C_SO  14;shift out
+#define C_SI  15;shift in
+#define C_DLE 16;data link escape
+#define C_DC1 17;device control 1
+#define C_DC2 18;device control 2
+#define C_DC3 19;device control 3
+#define C_DC4 20;device control 4
+#define C_NAK 21;negative acknowledge
+#define C_SYN 22;synchronous idle
+#define C_ETB 23;end of transmission block
+#define C_CAN 24;cancel
+#define C_EM  25;end of medium
+#define C_SUB 26;substitute
+#define C_ESC 27;escape
+#define C_FS  28;file separator
+#define C_GS  29;group separator
+#define C_RS  30;record separator
+#define C_US  31;unit separator
+
+#define C_SPC 32;space
+#define C_EXC 33;exclamation mark
+#define C_QOT 34;quotation mark
+#define C_NMS 35;number sign
+#define C_DOL 36;dollar sign	
+#define C_PRC 37;percent		
+#define C_AND 38;ampersand		
+#define C_APO 39;apostrofe		
+#define C_RBL 40;round bracket left
+#define C_RBR 41;round bracket right
+#define C_AST 42;asterisk
+#define C_PLS 43;plus		
+#define C_COM 44;comma	
+#define C_HYP 45;hyphen
+#define C_DOT 46;dot		
+#define C_FSH 47;front slash
+
+#define C_0   48
+#define C_1   49
+#define C_2   50
+#define C_3   51
+#define C_4   52
+#define C_5   53
+#define C_6   54
+#define C_7   55
+#define C_8   56
+#define C_9   57
+#define C_COL 58;colon		
+#define C_SCL 59;semicolon
+#define C_LT  60;less-than
+#define C_EQ  61;equals		
+#define C_GT  62;greater-than
+#define C_QST 63;question mark
+#define C_AT  64;at-sign
+#define C_A   65
+#define C_B   66
+#define C_C   67
+#define C_D   68
+#define C_E   69
+#define C_F   70
+#define C_G   71
+#define C_H   72
+#define C_I   73
+#define C_J   74
+#define C_K   75
+#define C_L   76
+#define C_M   77
+#define C_N   78
+#define C_O   79
+#define C_P   80
+#define C_Q   81
+#define C_R   82
+#define C_S   83
+#define C_T   84
+#define C_U   85
+#define C_V   86
+#define C_W   87
+#define C_X   88
+#define C_Y   89
+#define C_Z   90
+#define C_SBL 91;square bracket left	
+#define C_BSH 92;backslash
+#define C_SBR 93;square bracket right		
+#define C_CAR 94;caret		
+#define C_USC 95;underscore			
+#define C_GAC 96;grave accent
+#define C_a   97
+#define C_b   98
+#define C_c   99
+#define C_d   100
+#define C_e   101
+#define C_f   102
+#define C_g   103
+#define C_h   104
+#define C_i   105
+#define C_j   106
+#define C_k   107
+#define C_l   108
+#define C_m   109
+#define C_n   110
+#define C_o   111
+#define C_p   112
+#define C_q   113
+#define C_r   114
+#define C_s   115
+#define C_t   116
+#define C_u   117
+#define C_v   118
+#define C_w   119
+#define C_x   120
+#define C_y   121
+#define C_z   122
+#define C_CBL 123;curly bracket left		
+#define C_VB  124;vertical bar		
+#define C_CBR 125;curly bracket right		
+#define C_TIL 126;tilde
+#define C_DEL 127;delete
+
+#define C_NBSP	255;non-breaking space

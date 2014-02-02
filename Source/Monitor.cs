@@ -5,7 +5,7 @@ using System.Text;
 using UnityEngine;
 namespace ProgCom
 {
-    class Monitor
+    public class Monitor : PartModule, IPCHardware, PCGUIListener
     {
         Texture2D image;
         protected Rect windowPos;
@@ -15,25 +15,24 @@ namespace ProgCom
         UInt16 colorPointer;
         UInt16 modePtr;
         Color[] colors;
-        public bool visible;
         protected int windowID;
+        UInt16 address = 62959;
+        GUIStates guis = new GUIStates();
 
-
-
-        public Monitor(Int32[] arr, UInt16 ptr, UInt16 chars, UInt16 colPtr, UInt16 modePointer)
-        {
+        public override void  OnStart(PartModule.StartState state) {
+ 	        base.OnStart(state);
             windowID = Util.random();
 
-            mem = arr;
-            pointer = ptr;
-            charSetPtr = chars;
+            mem = new Int32[2577];
+            pointer = 529;
+            charSetPtr = 17;
             colors = new Color[16];
-            modePtr = modePointer;
+            modePtr = 0;
             for (int i = 0; i < 16; ++i) {
                 colors[i] = new Color();
                 colors[i].a = 1.0f;
             }
-            colorPointer = colPtr;
+            colorPointer = 1;
 
             image = new Texture2D(256, 256, TextureFormat.ARGB32, false);
             windowPos = new Rect();
@@ -48,6 +47,22 @@ namespace ProgCom
                 }
             }
             image.Apply();
+
+            //init monitor drarwing
+            RenderingManager.AddToPostDrawQueue(3, new Callback(draw));
+
+            //initialise fonts and colors and things
+            //init default values in memory
+            int index = charSetPtr;
+            foreach (UInt32 font in getDefaultFont()) {
+                mem[index] = (Int32)font;
+                ++index;
+            }
+            index = colorPointer;
+            foreach (Int32 col in getDefaultColors()) {
+                mem[index] = col;
+                ++index;
+            }
         }
 
         private void updateColors()
@@ -138,19 +153,19 @@ namespace ProgCom
 
         public void draw()
         {
-            if (visible) {
+            if (guis.mon) {
                 GUI.skin = HighLogic.Skin;
                 windowPos = GUILayout.Window(windowID, windowPos, windowGUI, "Monitor", GUILayout.MinWidth(100));
             }
         }
 
-        public void update()
+        public override void OnUpdate()
         {
-            if (visible)
+            if (guis.mon)
                 drawImage();
         }
 
-        public UInt32[] getDefaultFont()
+        private UInt32[] getDefaultFont()
         {
             UInt32[] cga_8 = {
             0x0, 0x0,
@@ -413,7 +428,7 @@ namespace ProgCom
             return cga_8;
         }
 
-        public Int32[] getDefaultColors()
+        private Int32[] getDefaultColors()
         {
             Int32[] c64Cols = {
             0x00000000,
@@ -434,6 +449,51 @@ namespace ProgCom
 	        0x00959595
         };
             return c64Cols;
+        }
+
+        public void connect()
+        {
+            
+        }
+
+        public void disconnect()
+        {
+            
+        }
+
+        public Tuple<ushort, int> getSegment(int id)
+        {
+            return new Tuple<UInt16, int>(address, 2577);
+        }
+
+        public int getSegmentCount()
+        {
+            return 1;
+        }
+
+        public void recInterruptHandle(InterruptHandle seg)
+        {
+            
+        }
+
+        public int memRead(ushort position)
+        {
+            return mem[position - address];
+        }
+
+        public void memWrite(ushort position, int value)
+        {
+            mem[position - address] = value;
+        }
+
+        public void tick(int ticks)
+        {
+            
+        }
+
+        public void recGUIState(GUIStates g)
+        {
+            guis = g;
         }
     }
 }

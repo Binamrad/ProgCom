@@ -7,7 +7,7 @@ using System.IO;
 
 namespace ProgCom
 {
-    class Assembler2
+    public class Assembler2
     {
         private class FileData
         {
@@ -123,16 +123,12 @@ namespace ProgCom
 
         Dictionary<String, Macro> macros;
         Dictionary<String, int> defines;
-        Dictionary<String, int> stdDefines;
         LinkedList<String> filesIncluded;
         Dictionary<String, int> registers;
         Dictionary<String, Instruction> instructions;
-        public Assembler2(Dictionary<String, Instruction> ins)
+        public Assembler2()
         {
-            stdDefines = new Dictionary<string, int>();
-            instructions = ins;
             //set up registers
-            //TODO: this should not be hardcoded.
             registers = new Dictionary<String, int>();
             registers.Add("r0", 0);//zero
             registers.Add("zero", 0);//zero
@@ -148,11 +144,11 @@ namespace ProgCom
             registers.Add("r10", 10);
             registers.Add("r11", 11);
             registers.Add("r12", 12);
-            registers.Add("r13", 13);
+            //registers.Add("r13", 13);
             registers.Add("fp", 13);//frame pointer
-            registers.Add("r14", 14);
+            //registers.Add("r14", 14);
             registers.Add("sp", 14);//stack pointer
-            registers.Add("r15", 15);
+            //registers.Add("r15", 15);
             registers.Add("ra", 15);//return adress
             //more registers
             registers.Add("a0", 16);
@@ -168,38 +164,131 @@ namespace ProgCom
             registers.Add("a10", 26);
             registers.Add("a11", 27);
             registers.Add("a12", 28);
-            registers.Add("a13", 29);
-            registers.Add("a14", 30);
+            //registers.Add("a13", 29);
+            registers.Add("ex", 29);//extra bits
+            //registers.Add("a14", 30);
             registers.Add("es", 30);//exception status
-            registers.Add("a15", 31);
+            //registers.Add("a15", 31);
             registers.Add("ea", 31);//exception address
 
+            //add instructions
+            Dictionary<String, Instruction> Instr = new Dictionary<String, Instruction>();
+            //add all instructions by the order of their values
+            /*****************************************************************************************/
+            //arithmetic
+            Instr.Add("add", new Instruction(0x00, true, true, true, false, false, false, true, false, 0));
+            Instr.Add("sub", new Instruction(0x01, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("mul", new Instruction(0x02, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("div", new Instruction(0x03, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("and", new Instruction(0x04, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("or", new Instruction(0x05, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("xor", new Instruction(0x06, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("not", new Instruction(0x07, false, false, true, false, false, false, false, false, 0));
+            Instr.Add("addi", new Instruction(0x08, true, true, false, true, false, false, false, true, 0));
+            Instr.Add("subi", new Instruction(0x09, true, true, false, true, false, false, false, true, 0));
+            Instr.Add("muli", new Instruction(0x0a, true, true, false, true, false, false, false, true, 0));
+            Instr.Add("divi", new Instruction(0x0b, true, true, false, true, false, false, false, true, 0));
+            Instr.Add("andi", new Instruction(0x0c, true, true, false, true, false, false, false, true, 0));
+            Instr.Add("ori", new Instruction(0x0d, true, true, false, true, false, false, false, true, 0));
+            Instr.Add("xori", new Instruction(0x0e, true, true, false, true, false, false, false, true, 0));
+            //0x0f --
 
-        }
-        public void bindGlobalCall(String s, int i)
-        {
-            stdDefines.Add(s, i);
+            /*****************************************************************************************/
+            //extended arithmetic
+            Instr.Add("flcmp", new Instruction(0x10, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("shr", new Instruction(0x11, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("shl", new Instruction(0x12, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("sra", new Instruction(0x13, true, true, true, false, false, false, false, false, 0));
+            //Instr.Add("sx", new Instruction(0x14, true, false, true, false, false, false, false, false, 0));
+            //0x15 float
+            Instr.Add("fadd", new Instruction(0x15, false, false, false, false, false, false, false, false, 0));
+            Instr.Add("fsub", new Instruction(0x15, false, false, false, false, false, false, false, false, 1));
+            Instr.Add("fmul", new Instruction(0x15, false, false, false, false, false, false, false, false, 2));
+            Instr.Add("fdiv", new Instruction(0x15, false, false, false, false, false, false, false, false, 3));
+            Instr.Add("fmerge", new Instruction(0x15, false, false, false, false, false, false, false, false, 4));
+            Instr.Add("ftoi", new Instruction(0x15, false, false, false, false, false, false, false, false, 5));
+            Instr.Add("ftof", new Instruction(0x15, false, false, false, false, false, false, false, false, 6));
+            Instr.Add("fss", new Instruction(0x15, true, false, false, false, false, false, false, false, 7));
+            Instr.Add("fpop", new Instruction(0x15, true, false, false, false, false, false, false, false, 8));
+            Instr.Add("fpush", new Instruction(0x15, true, false, false, false, false, false, false, false, 9));
+            Instr.Add("fsel0", new Instruction(0x15, false, false, false, false, false, false, false, false, 10));
+            Instr.Add("fsel1", new Instruction(0x15, false, false, false, false, false, false, false, false, 11));
+            Instr.Add("fflush", new Instruction(0x15, false, false, false, false, false, false, false, false, 12));
+            Instr.Add("fpush1", new Instruction(0x15, false, false, false, false, false, false, false, false, 13));
+            Instr.Add("fpushn1", new Instruction(0x15, false, false, false, false, false, false, false, false, 14));
+            Instr.Add("fpushpi", new Instruction(0x15, false, false, false, false, false, false, false, false, 15));
+            //0x16 extended instruction set, register instructions
+            //Instr.Add("nop", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0000));
+            Instr.Add("movbr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0800));
+            Instr.Add("movhwr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0900));
+            Instr.Add("movblr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0a00));
+            Instr.Add("movhwlr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0b00));
+            Instr.Add("cmp", new Instruction(0x17, true, true, true, false, false, false, false, false, 0));
+            //0x18 flcmpi
+            Instr.Add("sri", new Instruction(0x19, true, true, false, true, false, false, false, false, 0));
+            Instr.Add("sli", new Instruction(0x1a, true, true, false, true, false, false, false, false, 0));
+            Instr.Add("srai", new Instruction(0x1b, true, true, false, true, false, false, false, false, 0));
+            //0x1c sxi
+            //0x1d --
+            //0x1e extended instruction set, immediate instructions
+            //Instr.Add("nop", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0000));
+            Instr.Add("movb", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0800));
+            Instr.Add("movhw", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0900));
+            Instr.Add("movbl", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0a00));
+            Instr.Add("movhwl", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0b00));
+            //0x1f cmpi
+
+            /****************************************************************************************/
+            //branching
+            Instr.Add("brr", new Instruction(0x20, false, false, true, false, false, false, false, false, 0));
+            //0x21 bner
+            Instr.Add("jmpr", new Instruction(0x22, false, false, true, false, false, false, false, false, 0));
+            //0x23 blr
+            //0x24 bler
+            //0x25 bxr
+            Instr.Add("callr", new Instruction(0x26, false, false, true, false, false, false, false, false, 0));
+            //0x27 eret
+            Instr.Add("br", new Instruction(0x28, false, false, false, true, false, false, true, false, 0));
+            Instr.Add("halt", new Instruction(0x28, false, false, false, false, false, false, false, false, -1));
+            Instr.Add("beq", new Instruction(0x28, true, true, false, true, false, false, true, false, 0));
+            Instr.Add("bne", new Instruction(0x29, true, true, false, true, false, false, true, false, 0));
+            Instr.Add("bi", new Instruction(0x29, true, false, false, true, false, false, true, false, 0));
+            Instr.Add("jmp", new Instruction(0x2a, false, false, false, true, false, false, false, true, 0));
+            Instr.Add("bl", new Instruction(0x2b, true, true, false, true, false, false, true, false, 0));
+            Instr.Add("ble", new Instruction(0x2c, true, true, false, true, false, false, true, false, 0));
+            //Instr.Add("bx", new Instruction(0x2d, false, false, false, true, false, false, true, false, 0));
+            Instr.Add("call", new Instruction(0x2e, false, false, false, true, false, false, true, false, 0));
+            Instr.Add("eret", new Instruction(0x2f, false, false, false, false, false, false, false, false, 0));
+
+            /***************************************************************************************/
+            //data move
+            Instr.Add("mov", new Instruction(0x30, true, false, true, false, false, false, false, false, 0));
+            Instr.Add("nop", new Instruction(0x30, false, false, false, false, false, false, false, false, 0));
+            //0x31 --
+            Instr.Add("rdr", new Instruction(0x32, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("wrr", new Instruction(0x33, true, true, true, false, false, false, false, false, 0));
+            Instr.Add("push", new Instruction(0x34, false, false, true, false, false, false, false, false, 0));
+            Instr.Add("pop", new Instruction(0x35, true, false, false, false, false, false, false, false, 0));
+            //0x36 --
+            Instr.Add("int", new Instruction(0x37, false, false, true, false, false, false, false, false, 0));
+            Instr.Add("movi", new Instruction(0x38, true, false, false, true, false, false, false, true, 0));
+            Instr.Add("movil", new Instruction(0x38, true, false, false, true, true, false, false, true, 0));
+            Instr.Add("movhi", new Instruction(0x39, true, false, false, true, false, false, false, true, 0));
+            Instr.Add("rd", new Instruction(0x3a, true, true, false, true, false, false, false, true, 0));
+            Instr.Add("wr", new Instruction(0x3b, true, true, false, true, false, false, false, true, 0));
+            //0x3c --
+            //0x3d --
+            //Instr.Add("rdx", new Instruction(0x3e, false, true, false, true, false, false, false, true, 0));
+            Instr.Add("inti", new Instruction(0x37, false, false, false, true, false, false, true, false, 0));
+
+            instructions = Instr;
         }
         public Int32[] assemble(String fileName, int loadLocation)
         {
-            defines = new Dictionary<string, int>(stdDefines);
+            defines = new Dictionary<string, int>();
             filesIncluded = new LinkedList<String>();
             filesIncluded.AddLast(fileName);
             macros = new Dictionary<String, Macro>();
-            // step 1: load the file as a list of lines
-            // step 2: remove all comments
-            // step 3: replace all whitespace with single spaces
-            // step 4: remove leading and closing whiteSpace
-            // step 5: split the document into meta, data and text parts
-            // step 5.4: localise the text as apropriate
-            // Step 5.5: turn the macros into actual text here.
-            // time for a TEST!!
-
-            // step 6: perform these steps on all includes <- already done ^^
-            // step 7: merge all meta/data/text sets <- done too
-            // step 9: fix the data field <- what did this mean?
-            // step 10:merge to integers <- TODO
-
 
             FileData f = loadText(fileName);
             KSP.IO.TextWriter txtOut = KSP.IO.TextWriter.CreateForType<Assembler2>("DEBUG_intermediate.txt");
@@ -221,7 +310,7 @@ namespace ProgCom
             Int32[] i = finalise(f, loadLocation);
             //return i
 
-            txtOut = KSP.IO.TextWriter.CreateForType<Assembler2>("DEBUG_code.txt");
+            txtOut = KSP.IO.TextWriter.CreateForType<Assembler2>("DEBUG_code.txt");//remove this?
             foreach (int x in i) {
                 txtOut.WriteLine(x);
             }
@@ -263,6 +352,7 @@ namespace ProgCom
             }
             f.inst = tmp;
         }
+        //helper function for above, most of things happen here
         private void unWrapInner(FileData f)
         {
             LinkedList<String> tmp = new LinkedList<String>();
@@ -294,7 +384,7 @@ namespace ProgCom
                 //with macro writing out of the way, we can concentrate on getting all the include statements out of the way
                 if (s.StartsWith("#include")) {
                     String s2 = Util.cutStrBefore(s, " ");
-                    includes.AddLast(s2);
+                    includes.AddLast(s2);//we should include the file asap, otherwise macro definitions will be unrecognised here.
                     continue;
                 }
 
@@ -320,7 +410,7 @@ namespace ProgCom
                             throw new FormatException("Not A Number or too large/small in: " + s);
                         }
                     }
-                } else if (s.StartsWith("#stringw")) {
+                } else if (s.StartsWith("#string")) {
                     String convert = s.Substring(s.IndexOf("\"") + 1);
                     convert = convert.Substring(0, convert.LastIndexOf("\""));
                     convert = Util.fixEscapeChars(convert);
@@ -328,7 +418,7 @@ namespace ProgCom
                     foreach (Int32 i in stringInts) {
                         tmp.AddLast(i.ToString());
                     }
-                } else if (s.StartsWith("#string")) {
+                } else if (s.StartsWith("#string_compact")) {
                     String convert = s.Substring(s.IndexOf("\"") + 1);
                     convert = convert.Substring(0, convert.LastIndexOf("\""));
                     convert = Util.fixEscapeChars(convert);
@@ -375,39 +465,8 @@ namespace ProgCom
                 f.inst.AddFirst("movi sp, DATA_END");
             }
             if (opts[4]) {
-                //code is oncompatible with pic
-                if (opts[0]) {
-                    throw new FormatException("AUTLDR and PIC declared simultaneously. AUTLDR needs a non PIC environment to function");
-                }
+                //this does nothing at the moment
 
-                //note that these will be ordered bottom-to-top, thus essentially being executed backwards
-                //go to program load location
-                f.inst.AddFirst("jmp PROG_POS + 20");
-                //restore registers
-                f.inst.AddFirst("sli r0, r4, 32");//restore EX
-                f.inst.AddFirst("mov r5, r4");
-                f.inst.AddFirst("mov r3, r4");
-                f.inst.AddFirst("mov r2, r4");
-                f.inst.AddFirst("mov r1, r4");
-                //tape load loop
-                f.inst.AddFirst("bl r2, r3, - 6");
-                f.inst.AddFirst("addi r2, r2, 1");
-                f.inst.AddFirst("addi r5, r5, 1");
-                f.inst.AddFirst("wr r1, r5, 0");
-                f.inst.AddFirst("callr r1");
-                f.inst.AddFirst("movi r1, 122");
-                //pre loop init
-                f.inst.AddFirst("movi r5, PROG_POS + 20");
-                f.inst.AddFirst("movi r2, 0");
-                //order tape to read program from drive
-                f.inst.AddFirst("callr r1");
-                f.inst.AddFirst("movi r1, 116");
-                //assemble instruction
-                f.inst.AddFirst("ori r2, r1, 2");
-                f.inst.AddFirst("sli r1, r1, 8");
-                //set r1 and r3 to length of program
-                f.inst.AddFirst("mov r3, r1");
-                f.inst.AddFirst("movi r1, DATA_END%rel + 1 - 20");//this is total length of the program since this is the first instruction loaded in memory
             }
             Dictionary<String, int> labels = new Dictionary<String, int>();
             labels.Add("TEXT_START", i);
@@ -704,7 +763,7 @@ namespace ProgCom
                 subOut = false;
                 addOut = addNext;
             } else {
-                throw new FormatException("A label must either be at the start of an adress field or following a '+' or '-': " + s);//there are an exreme ammount of error cases that needs to be reported separately in this function. This is awful.
+                throw new FormatException("A label must either be at the start of an address field or following a '+' or '-': " + s);//there are an exreme ammount of error cases that needs to be reported separately in this function. This is awful.
             }
             return i;
         }
@@ -943,7 +1002,7 @@ namespace ProgCom
 
             tmp = new LinkedList<string>();
             foreach (String s in f.data) {
-                if (s.StartsWith("#string")) {
+                if (s.StartsWith("#string") || s.StartsWith("#string_compact")) {
                     tmp.AddLast(s);
                     continue;//avoid replacing content in strings
                 }

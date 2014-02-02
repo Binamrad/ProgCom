@@ -1,0 +1,19 @@
+.text
+#include libText.txt
+#global main
+main:
+	;read and print a string
+	movi	r1, string
+	call	printStrLn
+	movi	r1, marea
+	movi	r2, 33
+	call	readString
+	call	printStrLn
+
+	br	main
+
+.data
+string:
+#string "enter some text:"
+marea:
+#allocate 33

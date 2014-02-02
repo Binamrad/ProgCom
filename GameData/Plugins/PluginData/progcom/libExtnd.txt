@@ -2,10 +2,48 @@
 ;mostly small macros
 .text
 
-;convert pointer to byte pointer
-#macro toptr8 rA rB {
-	sli	rA, rB, 2
+;return
+#macro ret {
+	jmpr	ra
 }
+
+;roll right
+#macro ror rA rB rC {
+	shr	rA, rB, rC
+	or	rA, rA, ex
+}
+
+;roll left
+#macro rol rA rB rC {
+	shl	rA, rB, rC
+	or	rA, rA, ex
+}
+
+;roll left immediate
+#macro rli rA rB ADDR {
+	sli	rA, rB, ADDR
+	or	rA, rA, ex
+}
+
+;roll right immediate
+#macro rri rA rB ADDR {
+	sri	rA, rB, ADDR
+	or	rA, rA, ex
+}
+
+;swaps rA and rB
+#macro swap rA rB {
+	add	rA, rA, rB;rA = rA+rB
+	sub	rB, rA, rB;rB = rA+rB-rB = rA
+	sub	rA, rA, rB;rA = rA+rB-rA = rB
+}
+
+;negates rB and stores in rA
+#macro neg rA rB {
+	sub	rA, r0, rB
+}
+
+;8 bit instructions
 
 #macro add8 rA rB rC {
 	add	rA, rB, rC
@@ -17,55 +55,18 @@
 	andi	rA, rA, 255
 }
 
-;read a 8-bit integer from memory using a byte pointer
-#macro rd8 rA rB C {
-	rd	rA, rB, C
-	push	a13
-	movi	a13, rB
-	andi	a13, a13, 3
-	sli	a13, a13, 5
-	sr	rA, rA, a13
-	pop	a13
-	andi	rA, rA, 255
+#macro tobyteptr rA rB {
+	sri	rA, rB, 2
 }
 
-;return
-#macro ret {
-	jmpr	ra
+#macro rd8 rA rB ADDR {
+	;read from memory
+	;mask out byte we want
 }
 
-;roll right
-#macro ror rA rB rC {
-	shr	rA, rB, rC
-	ax	rA, rA
-}
-
-;roll left
-#macro rol rA rB rC {
-	shl	rA, rB, rC
-	ax	rA, rA
-}
-
-;roll left immediate
-#macro rli rA rB ADDR {
-	sli	rA, rB, ADDR
-	ax	rA, rA
-}
-
-;roll right immediate
-#macro rri rA rB ADDR {
-	sri	rA, rB, ADDR
-	ax	rA, rA
-}
-
-;swaps rA and rB
-#macro swap rA rB {
-	add	rA, rA, rB;rA = rA+rB
-	sub	rB, rA, rB;rB = rA+rB-rB = rA
-	sub	rA, rA, rB;rA = rA+rB-rA = rB
-}
-
-;moves ex to rA
-#macro movx rA {
-	ax	rA, r0
+#macro wr8 rA rB ADDR {;this instruction is really hard
+	;read from memory location
+	;mask out byte we want to replace
+	;shift in the data we want to put there
+	;write back to proper position
 }

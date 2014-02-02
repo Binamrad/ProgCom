@@ -7,95 +7,30 @@ word length:	32-bit
 registers:	32
 fpu:		two 4-word stacks
 
+some of these values can be accessed in software through these labels by including libLabel.txt:
 
-Memory:
-
-the first 128 memory locations (0->127) are reserved for memory mapped control and navigation values.
-Most of the vectors here are in a fixed point format. The ordering of the parameters of the vectors are adress = X, adress+1 = Y, adress+2 = Z.
-the accuracy of the fixed point vectors are determined by the value at GLOBAL_VERTORACCURACY. (the behind-the-scenes conversion from the floats that the game uses to the fixed point vectors is this: (int)(vector.whatever*global_vectorAccuracy)) All speed readings use *GLOBAL_SPEEDACCURACY rather than vectoracuracy.
-these values can be accessed at the following defined adresses:
-
-label				value	explaination
-GLOBAL_MAINTHROTTLE		0	the throttle for the ship. 0 is minimum, 1024 is maximum.
-GLOBAL_YAW			1	yaw control for the ship. -1024 is minimum, 1024 is maxium.
-GLOBAL_PITCH			2	pitch control for the ship. -1024 is minimum, 1024 is maximum.
-GLOBAL_ROLL			3	roll control for the ship. -1024 is minimum, 1024 is maximum.
-GLOBAL_SURFACE_EAST		4	the eastwards vector of the surface, in x,y,z of the scene coordinate system
-GLOBAL_SURFACE_UP		7	the upwards vector of the surface, in x,y,z of the scene coordinate system
-GLOBAL_SURFACE_NORTH		10	the northwards vector of the surface
-GLOBAL_VESSEL_X			13	the x vector of the scene coordinate system according to the ship coord. system.
-GLOBAL_VESSEL_Y			16	the y vector of the scene coordinate system according to the ship coord. system
-GLOBAL_VESSEL_HEADING		16	same as above
-GLOBAL_VESSEL_Z			19	the z vector of the scene coordinate system according to the ship coord. system
-GLOBAL_ORBITSPEED		22	the orbital speed vector (speed*direction) of the ship th scene coord. system
-GLOBAL_SURFACESPEED		25	the surface speed vector (speed*direction) of the ship in scene coord. system
-GLOBAL_ANGULARVELOCITY		28	the angular velocity vector of the ship
-GLOBAL_ALTITUDE			31	the altitude of the ship, in metres. (this is not a fixed point number)
-GLOBAL_NUMPAD_OUT		32	the locations for the numpad output numbers. 
-GLOBAL_NUMPAD_MSG		36	the final numpad output location. functionally the same but with another label.
-GLOBAL_NUMPAD_IN		37	the numpad input location.
-GLOBAL_NUMPAD_NEWIN		38	this adress is set to 1 when use user presses enter on the numpad. must be set to 0 by a program.
-GLOBAL_NUMPAD_FORMAT		39	this adress is read to determine the format of the output. Each output area has 2 bits to determine it's format. 0 = integer, 1 = floating point. 2 & 3 are unused at the moment.
-GLOBAL_TIMER			40	the cpu:s timer is accessible at this adress. it contains the number of cycles that has elapsed since the timer last reset. can be written to and read from as normal.
-GLOBAL_VECTORACCURACY	  	41	the accuracy for the fixed-point vectors the computer uses to represent position and rotation. defaults to 1024.
-GLOBAL_SCREEN_MODE		42	screen mode register
-GLOBAL_SPEEDACCURACY		43	accuracy for fixed-point vectors used for velocity. defaults to 16. if negative it is interpreted as (1/-GLOBAL_SPEEDACCURACY) when calculating the vectors. This is useful if you are traveling near, at or over the speed of light.
-GLOBAL_IENABLE			44	interrupt enable, see interrupts.
-GLOBAL_CLOCK			45	the computer clock. contains the complete ammount of cycles that the computer has spent turned on.
-GLOBAL_IADRESS			46	the adress the execution jumps to at interrupts, see interrupts below.
-GLOBAL_TIMER_MAX		47	the value at which the timer starts over at zero. if set to 0, the timer never resets.
-GLOBAL_PILOT_THROTTLE		48	the pilot-entered value for the throttle. 0 is minimum, 1024 is maximum.
-GLOBAL_PILOT_YAW		49	the pilot-entered value for the yaw. -1024 is minimum, 1024 is maxium.
-GLOBAL_PILOT_PITCH		50	the pilot-entered value for the pitch. -1024 is minimum, 1024 is maxium.
-GLOBAL_PILOT_ROLL		51	the pilot-entered value for the roll. -1024 is minimum, 1024 is maxium.
-GLOBAL_PILOT_RCS_RIGHT		52	the pilot-entered value for rcs right. -1024 is minimum, 1024 is maxium.
-GLOBAL_PILOT_RCS_UP		53	the pilot-entered value for rcs up. -1024 is minimum, 1024 is maxium.
-GLOBAL_PILOT_RCS_FORWARD	54	the pilot-entered value for rcs forward. -1024 is minimum, 1024 is maxium.
-GLOBAL_RCS_RIGHT		52	RCS rightwards control for the ship. -1024 is minimum, 1024 is maxium.
-GLOBAL_RCS_UP			53	RCS upwards control for the ship. -1024 is minimum, 1024 is maxium.
-GLOBAL_RCS_FORWARD		54	RCS forward control for the ship. -1024 is minimum, 1024 is maxium.
-GLOBAL_ACTIONGROUP		55	Activation of actiongroups. see Misc section at the bottom of the document.
-
-other labels:
-PROG_POS			--	the location the program is loaded at
-TEXT_START			--	the location where the non-automatically generated code starts.
-DATA_START			--	the location in memory where the data section of the code is located.
-DATA_END			--	the location in memory where the end of the data section is located.
-GLOBAL_SCREEN			63488	the screen data pointer
-GLOBAL_SCREEN_COLOR		63472	screen color map
-GLOBAL_SCREEN_FONT		65024	font map
-
-GLOBAL_GSB0			64	serial bus 0
-GLOBAL_GSB1			68	serial bus 1
-...				...	...
-GLOBAL_GSB7			92	serial bus 7
-
-non-address labels (note: you can generally assume these need the movil instruction):
-CPU_CLOCKRATE			--	clock rate for the cpu
-CPU_RAM				--	total amount of memory addresses in ram
-CPU_MAXADDRESS			--	maximum addressable location in memory
-
+label:				verbose:
+CPU_CLOCKRATE			clock rate for the cpu
+CPU_RAM				total amount of memory addresses in ram
+CPU_MAXADDRESS			maximum addressable location in memory
 
 
 Registers:
 
-r0->r15 register 0 to 15
+r0->r12 register 0 to 12
 note:
-	r0	can also be accessed as zero, is always locked to 0
-	r15	is set to pc when call/callr is used and pc-1 when loop is used. can also be accessed as ra (Return Adress).
-	r14	is used by the push/pop instructions. Should be set to point at a stack. can also be accessed as sp (Stack Pointer).
-	r13	can also be accessed as fp (Frame Pointer).
-	Thus, you might want to be careful when overriding r13->r15
+	r0	can also be accessed as "zero" and always contains the value 0
 
-a0->a15 	auxilliary registers, register 16 to 31. Can be used exactly as the other registers, they just use a different naming scheme.
-note:
-	a14	can also be accessed as es, exeption status. If interrupts are enabled, this register can change unpredictably.
-	a15	can also be accessed as ea, exception adress. If interrupts are enabled, this register can change unpredictably.
+a0->a12 	register 16 to 28. Can be used exactly as the other registers, they just use a different naming scheme.
 
-EX 		"extra" register
-note:
-	EX 	cannot be accessed the same way as r0->r15 and a0->a15.
-	EX 	contains overflow/underflow from addition, subtraction, multiplication and bitshifting. It also contains the remainder after division.
+Other registers:
+	ra (Return Address)	is set to pc when call/callr is used and pc-1 when loop is used.
+	sp (Stack Pointer)	is used by the push/pop instructions. Should be set to point at a stack.
+	fp (Frame Pointer)
+	ex (EXtra)		contains overflow/underflow from addition, subtraction, multiplication and bitshifting. It also contains the remainder after division.
+	es (Exception Status)	when an interrupt is triggered this register is set to the interrupt number
+	ea (Exception Address)	when an interrupt is triggered this register is set to pc
+	pc (Program Counter)	points to the next instruction
 
 
 Instructions:
@@ -103,7 +38,7 @@ Instructions:
 rA = first register specified
 rB = second register specified
 rC = third register specified
-C = constant, 16-bit unsigned integer
+C  = constant, 16-bit unsigned integer
 lC = long constant, 21-bit unsigned integer
 pc = program counter, 16-bit unsigned integer
 
@@ -130,6 +65,8 @@ shl		SHift Left			rA = rB << rC			shl	r1, r2, r3
 sli		Shift Left Immediate		rA = rB << C			sli	r1, r2, 4
 shr		SHift Right (logical)		rA = rB >> rC			shr	r1, r2, r3
 sri		Shift Right Immediate (logical)	rA = rB >> C			sri	r1, r2, 4
+sra		SHift Right Arithmetical	rA = rB >> rC			sra	r1, r2, r3
+srai		Shift Right Arithm. Immediate	rA = rB >> C			sri	r1, r2, 4
 and		bitwise AND			rA = rB & rC			and	r1, r2, r3
 andi		bitwise	AND Immediate		rA = rB & C			andi	r1, r2, 4
 or		bitwise OR			rA = rB | rC			or	r1, r2, r3
@@ -137,8 +74,6 @@ ori		bitwise OR Immediate		rA = rB ^ C			ori	r1, r2, 4
 xor		bitwise XOR			rA = rB ^ rC			xor	r1, r2, r3
 xori		botwise XOR Immediate		rA = rB ^ C			xori	r1, r2, 4
 not		Not				rC = rC ^ -1			not	r1
-ax		Add eX				rA = rB + EX			ax	r1, r2
-sx		Subtract eX			rA = rB - EX			sx	r1, r2
 br		BRanch				pc += C				br	label
 brr		BRanch Register			pc += rC			brr	r1
 jmp		JuMP				pc = C				jmp	label
@@ -150,17 +85,15 @@ bl		Branch if Less than		pc += C  if rA < rB		bl	r1, r2, label
 ble		Branch if Less or Equal		pc += C  if rA <= rB		ble	r1, r2, label
 call		CALL				r15 = pc, pc += C		call	label
 callr		CALL Register			r15 = pc, pc = rC		call	r1
-bx		Branch eX 			pc += C  if EX != 0		bx	label
 rd		ReaD				rA = mem(rB + C)		rd	r1, r2, label
-rdx		ReaD eX				EX = mem(rB + C)		rdx	r1, label
 wr		WRite				mem(rB+C) = rA			wr	r1, r2, label
 push		PUSH to stack top		mem(r14) = rA, r14 = r14 + 1	push	r1
 pop		POP stack top			r14 = r14 - 1, rA = mem(r14)	pop	r1
-halt		HALT				stop the emulator		halt
-nop		NO Operation			nothing				nop
+halt		HALT				halt execution			halt
+nop		NO oPeration			nothing				nop
 cmp		CoMPare				rA = -1 if rB < rC, rA = 0 if rB == rC, else rA = 1
 flcmp		FLoating point CoMPare		rA = -1 if rB < rC, rA = 0 if rB == rC, else rA = 1 note: will only work if rB and rC are floating point numbers
-int		INTerrupt			if exceptions are enabled, this spawns an exception and copies the argument to register es (ea = pc, es = rC, pc = GLOBAL_IADRESS if GLOBAL_IENABLE & 1 == 1) 
+int/inti	INTerrupt/INT. Immediate	if exceptions are enabled, this spawns an exception and copies the argument to register es (ea = pc, es = rC, pc = GLOBAL_IADRESS if GLOBAL_IENABLE & 1 == 1) 
 eret		Exception RETurn		pc = ea, enables interrupts.	eret
 
 floating point instructions:
@@ -169,55 +102,52 @@ note that both floating point stacks can perform operations simultaneously, and 
 
 Name:		Meaning:
 
-fpush		push rA to stack
-fpush1		push floating point 1 to stack
-fpushn1		push floating point -1 to stack
-fpushpi		push floating point pi to stack
+fpush		push rA to floating point stack
+fpush1		push floating point 1 to floating point stack
+fpushn1		push floating point -1 to floating point stack
+fpushpi		push floating point pi to floating point stack
 fpop		rA = top of floating point stack
 fadd		pop two numbers from stack, perform addition, push result to stack
 fsub		pop two numbers from stack, perform subtraction, push result to stack
 fmul		pop two numbers from stack, perform multiplication, push result to stack
 fdiv		pop two numbers from stack, perform division, push result to stack
-fsel0		select floating stack 0
-fsel1		select floating stack 1
+fsel0		select floating point stack 0
+fsel1		select floating point stack 1
 fmerge		adds the top number of stack 0 to top number of stack 1, result pushed to stack 0
 ftof		converts the integer at the top of the stack to a floating point number, and pushes on the stack
 ftoi		converts the floating point number at the top of the stack to integer, and pushes on the stack
 fflush		removes all entries from the selected floating point stack and aborts all operations
+fss		retreives some information on the floating point unit: the high half word contains the currently selected stack, the low half word contains the stack pointer
 
 Extended instruction set:
 please be aware that the assembler is not good at using these instructions yet, so don't put a constant higher than 255
 in them or you will use the wrong instruction
 
-movb		MOVe Byte			replace byte C of rA with byte C of rB
-movhw		MOVe Half-Word			replace half-word C of rA with half-word C of rB
-movbl		MOV Byte Low			replace byte C of rA with byte 0 of rB
-movhwl		MOVe Half-Word Low		replace half-word C of rA with half-word 0 of rB
+Name:		Meaning:			Result:
+
+movb/movbr	MOVe Byte			replace byte C/rC of rA with byte C/rC of rB
+movhw/movhwr	MOVe Half-Word			replace half-word C/rC of rA with half-word C/rC of rB
+movbl/movblr	MOV Byte Low			replace byte C/rC of rA with byte 0 of rB
+movhwl/movhwlr	MOVe Half-Word Low		replace half-word C/rC of rA with half-word 0 of rB
 
 
 Interrupts:
 
-in order to enable interrupts the memory at adress "GLOBAL_IENABLE" needs to be modified.
+in order to enable interrupts the memory at address 45, or "GLOBAL_IENABLE" if libLabel.txt is included, needs to be modified.
 the different bits in the memory adress have the following effect:
-bit	0:	enables interrupts
-	1:	enables interrupts from the timer
-	2:	enables interrupts when the flight status variables (yaw etc) are updated.
-	3:	enables interrupts when GLOBAL_NUMPAD_NEWIN != 0
-	4:	enables interrupts from the serial buses
-	5+:	does nothing yet
+bit	0:	enables interrupts to be queued
+	1:	enables interrupt queue handling
+	2+:	does nothing yet
 
-when an interrupt occurs pc is immidiately set to the adress stored at "GLOBAL_IADRESS".
-when the cpu jumps, interrupts are immidiately disabled.
+when an interrupt occurs pc is immidiately set to the adress stored at address 44, or "GLOBAL_IADRESS", the interrupt id is copied to register es and pc is copied to register ea.
+when the cpu jumps, bit 1 is immediately set to 0.
 one interrupt can be handled per instruction executed.
 256 interrupts can be queued at a time
 
-when hardware exceptions occur, values of 256 or higher are copied into the es register. this is what the values mean:
-256:	timer has flipped to 0
-257:	flight status variables updated (pitch, yaw etc.)
-258:	unimplemented/illegal instruction at ea-1 (unless the interrupt has been delayed, in which case the instruction could be anywhere)
-259:	input from numpad available (note: this exception will keep appearing while GLOBAL_NUMPAD_NEWIN != 0)
-260-267:serial bus 0-7, IBF or OBE
-268+:	not implemented yet.
+built in interrupts:
+interrupt id		cause
+256			timer has flipped to 0
+258			illegal instruction/division by 0
 
 
 Assembler:
@@ -235,7 +165,7 @@ PIC		default: off	will make a bunch of errors if you try to perform an operation
 MAINJMP		default: on	will add the line "br main" in the beginning of the file. This will make the code start execution at the "main"-label declared #global
 AUTOSTACK	default: on	will add the line "movi	sp, DATA_END" at the beginning of the file. This will automatically set the stack pointer to a good-ish position.
 ALWERR		default: off	will make sure that if there is a warning somewhere, the warning will stop compilation. This probably does nothing at the moment
-AUTLDR		default: on	will insert a program loader into the 20 instructions that are automatically loaded from tape. Without this it would be neccessary to manually create such a subroutine in the proper position, unless the program fits into 20 instructions.
+AUTLDR		default: on	does nothing at the moment.
 the syntax is this:
 .meta
 PIC=FALSE
@@ -349,15 +279,15 @@ Computer control panel:
 
 To run a program on the cpu, first write the program in a plain text file. The file can be run by using the command
 "insert asm <filename>" in the console.
-all programs you want to load should be stored in PluginData/programmableComputer
+all programs you want to load should be stored in <gamedir>/gamedata/progCom/plugins/PluginData/progCom
 
 console commands:
 insert [opt: asm] <filename>		Inserts the tape <filename> into the drive. using the optional asm command will signify that you are not loading a tape but assembly code. if "empty" is used as the filename, an empty tape is inserted.
 print <offset>				prints the first 100 memory locations after the offset in the dev console (alt-f2)
 clear					clears the console.
-debug					toggle the emulators debug mode. This makes it run at 1Hz per frame and print everything it's doing to the dev console (Alt-f2).
+debug					toggle the emulators debug mode. This makes it run at cycle per frame and print everything it's doing to the dev console (Alt-f2).
 step					if in debug mode, this will run the next instruction
-asm <filename>	[opt: <location>]	will create a tape file (extension .pct) and save it into the plugindata folder. if the location is specified the program will be expected to be loaded there. (default(unspecified) is 128)
+asm <filename>	[opt: <location>]	will create a tape file (extension .pct) and save it into the plugindata folder. If the location is specified the program will be expected to be loaded there. Default (unspecified) is 256
 save <filename>				will save the currently inserted tape into the pluginData folder
 eject <filename>			will save the currently inserted tape into the plugindata folder, unless "null" is used as the filename. Afterwards it inserts an empty tape into the drive.
 
@@ -371,18 +301,6 @@ GUI		minimizes/maximises the computer ui panel
 MON		displays/hides the monitor
 KBD		displays/hides the keyboard
 
-
-Misc:
-
-regarding actiongroups:
-	the action group memory slot resets to zero at roughly the same frequency as the flight variables update, ie once per frame.
-	the numbers you write to the slot have the following effects:
-		0: 	nothing
-		1->10: 	toggle custom action group 1->10
-		11:	toggle Abort group
-		12:	Activate next stage
-		13+:	Nothing, yet
-	the group is toggled when the memory slot is reset.
 	
 
 

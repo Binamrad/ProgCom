@@ -2,78 +2,72 @@
 
 .text
 #include libExtnd.txt
+#include libLabel.txt
+#include libASCII.txt
 
 #global setFontBackground
-setFontBackground:
+setBgCol:
+	andi	r1, r1, 15;sanity check
 	wr	r1, r0, colBackground
 	ret
 
 #global setFontCol
 setFontCol:
+	andi	r1, r1, 15;sanity check
 	wr	r1, r0, colFont
 	ret
 
 ;takes a char in r1 and puts it at the screen pointer
 #global putChar
 putChar:
-	rd	r2, r0, col_ptr
-	rd	r3, r0, row_ptr
+	push	ra
+	rd	r2, r0, screen_pointer
 	
-	;make sure pointers are in bounds
-	;column pointer
-	;movi	r4, 31
-	rd	r4, r0, col_max
-	bl	r2, r4, 4
-	;movi	r2, 1
-	rd	r2, r0, col_min
-	addi	r3, r3, 16
-	wr	r2, r0, col_ptr
-	wr	r3, r0, row_ptr
-	
-	;row pointer
-	;movi	r4, 496
-	rd	r4, r0, row_max
-	bl	r3, r4, 2
-	;movi	r3, 16
-	rd	r3, r0, row_min
-	wr	r3, r0, row_ptr
-	
-	;get offset
-	mov	r6, r2
-	sri	r2, r2, 1
-	add	r2, r2, r3
+	;make sure screen pointer is in bounds
+	movi	r3, screen_max
+	bl	r2, r3, 5
+	wr	r0, r0, screen_pointer
+	push	r1
+	call	scr_scroll
+	pop	r1
+	mov	r2, r0
 	
 	;add color to character
 	rd	r3, r0, colFont
 	sli	r3, r3, 8
-	add	r1, r1, r3
+	or	r1, r1, r3
 	rd	r3, r0, colBackground
 	sli	r3, r3, 12
-	add	r1, r1, r3
+	or	r1, r1, r3
+	
+	;get address
+	andi	r3, r2, 1
+	sri	r2, r2, 1
 
 	;set character at proper position
-	andi	r3, r6, 1
 	sli	r3, r3, 4
 	shl	r1, r1, r3
 
 	;read destination character
-	rd	r4, r2, GLOBAL_SCREEN
+	rd	r4, r2, GLOBAL_SCREEN + 496
 
 	;clear space for the character
-	movi	r5, -1  ;0xffff
+	movi	r5, 0xffff
 	shl	r5, r5, r3
-	rli	r5, r5, 16; might be a good choise to replace this with not
+	not	r5
 	and	r4, r4, r5
 	
 	;merge character and write back
-	add	r1, r1, r4
-	wr	r1, r2, GLOBAL_SCREEN
+	or	r1, r1, r4
+	wr	r1, r2, GLOBAL_SCREEN + 496
 
-	;add one to col_ptr and write the things back
-	rd	r1, r0, col_ptr
+	;increment screen_pointer and write back
+	rd	r1, r0, screen_pointer
 	addi	r1, r1, 1
-	wr	r1, r0, col_ptr
+	wr	r1, r0, screen_pointer
 
+	;return
+	pop	ra
 	ret
 
 ;the same as putChar, but takes formatting into account
@@ -84,7 +78,7 @@ printChar:
 	;if tab, align to nearest four chars
 	movi	r2, 9
 	bne	r1, r2, printc_n
-	rd	r3, r0, col_ptr
+	rd	r3, r0, screen_pointer
 	andi	r3, r3, 3
 	movi	r4, 4
 	sub	r3, r4, r3
@@ -97,23 +91,19 @@ printc_tab_loop:
 	subi	r3, r3, 1
 	br	printc_tab_loop	
 
-	;if newline, add 16 to row_ptr
+	;if newline, scroll screen upwards
 printc_n:
 	movi	r2, 10
 	bne	r2, r1, printc_r
-	rd	r1, r0, row_ptr
-	addi	r1, r1, 16
-	wr	r1, r0, row_ptr
+	call	scr_scroll
 	br	printc_end
 
-	;if carrige return, set col_ptr to col_min
+	;if carrige return, set screen_pointer to 0
 printc_r:
 	movi	r2, 13
 	bne	r1, r2, printc_put
-	rd	r1, r0, col_min
-	wr	r1, r0, col_ptr
+	wr	r0, r0, screen_pointer
 	br	printc_end
-
 
 	;else call putchar
 printc_put:
@@ -125,48 +115,43 @@ printc_end:
 
 ;prints the string r1 points to until it finds a null character
 ;this function has no regard for wrapping around the screen etc.
+;this functions now uses string instead of #string_compact strings
 #global printStr
 printStr:
 	push	a4
-	push	a5
 	push	ra
 	mov	a4, r1
 
 printsLoop:
-	rd	a5, a4, 0
-
-	andi	r1, a5, 255
-	beq	r1, r0, end
+	rd	r1, a4, 0
+	beq	r1, r0, prints_end
 	call	printChar
-
-	sri	r1, a5, 8
-	andi	r1, r1, 255
-	beq	r1, r0, end
-	call	printChar
-
-	sri	r1, a5, 16
-	andi	r1, r1, 255
-	beq	r1, r0, end
-	call	printChar
-
-	sri	r1, a5, 24
-	andi	r1, r1, 255
-	beq	r1, r0, end
-	call	printChar
-
 	addi	a4, a4, 1
 	br	printsLoop
 
-end:
+prints_end:
 	pop	ra
-	pop	a5
 	pop	a4
 
 	ret
 
-#global moveScreenUp
-moveScreenUp:
-	movi	r3, 496
+;same as above, except it prints a newline+carrige return after the text
+#global printStrLn
+printStrLn:
+	push	ra
+
+	call	printStr
+	movi	r1, 10
+	call	printChar
+	movi	r1, 13
+	call	printChar
+
+	pop	ra
+	ret
+
+#global scr_scroll
+scr_scroll:
+	movi	r3, 512
 	movi	r2, 0
 movScrLoop:
 	rd	r1, r2, GLOBAL_SCREEN + 16
@@ -189,71 +174,29 @@ movScrLoop:
 	bl	r2, r3, movScrLoop
 	ret
 
-;define a way to make the borders of the text box smaller or larger
-
-;border size in r1
-#global setHorBorder
-setHorBorder:
-	wr	r1, r0, col_min
-	movi	r2, 32
-	sub	r2, r2, r1
-	wr	r2, r0, col_max
-	ret
-
-;border size in r1
-#global setVertBorder
-setVertBorder:
-	sli	r1, r1, 4
-	wr	r1, r0, row_min
-	movi	r2, 1024
-	sub	r2, r2, r1
-	wr	r2, r0, row_max
-	ret
-
-;x and y in r1 and r2 respectively
-#global setScreenCursor
-setScreenCursor:
-	sli	r2, r2, 4
-	wr	r1, r0, col_ptr
-	wr	r2, r0, row_ptr
-	ret
-
 #global moveCursorBack
 moveCursorBack:
-	rd	r1, r0, col_ptr
-	rd	r2, r0, col_min
+	rd	r1, r0, screen_pointer
 	subi	r1, r1, 1
-	bl	r1, r2, 2
-	wr	r1, r0, col_ptr
+	bl	r1, r0, 2
+	wr	r1, r0, screen_pointer
 	ret
+	wr	r0, r0, screen_pointer
 	
-	;set column pointer to max
-	rd	r1, r0, col_max
-	subi	r1, r1, 1
-	wr	r1, r0, col_ptr
-
-	;subtract 16 from row pointer
-	rd	r1, r0, row_ptr
-	subi	r1, r1, 16
-	
-	;make sure row pointer is in range
-	rd	r2, r0, row_min
-	bl	r1, r2, 1
-	mov	r1, r2
-
-	;write back and return
-	wr	r1, r0, row_ptr
 	ret
+
+;*************************************************************************************
+;input code below
+
 
 ;get keyboard keypress, non-blocking
 ;does not unset the keyboard when reading
 ;return 1 in r2 if success, 0 if fail
 ;return keycode in r1
-rdkb:
-	rd	r2, r0, GLOBAL_GSB1
-	andi	r2, r2, 4
-	sri	r2, r2, 2
-	rd	r1, r0, GLOBAL_GSB1+1;keyboard location
+#global get_keypress
+get_keypress:
+	rd	r2, r0, GLOBAL_KEYBOARD_NEWIN
+	rd	r1, r0, GLOBAL_KEYBOARD
 	ret
 
 ;wait until a text-key has been pressed, then return it in r1
@@ -263,31 +206,29 @@ readChar:
 	push	ra
 	movi	r3, 255;r3 is not modified by rdkb
 rdc_loop:
-	call	rdkb
+	call	get_keypress
 	beq	r2, r0, rdc_loop
-	rd	r4, r0, GLOBAL_GSB1
-	andi	r5, r4, 6
-	xor	r4, r4, r5
-	wr	r4, r0, GLOBAL_GSB1;make sure we don't read this char again
+	wr	r0, r0, GLOBAL_KEYBOARD_NEWIN;make sure we don't read this char again
 	bl	r1, r0, rdc_loop
 	bl	r3, r1, rdc_loop
 	pop	ra
 	ret
 	
-;reads an enire string, stores it on the stack, and returns a pointer in r1.
-;since the string is stored on the stack, data can be lost when calling functions
+;reads an enire string and stores it in the area pointed to by r1
+;max length of string stored in r2
 ;enter is used to signify end of input
 ;the string is null terminated
-;length in r2
+;returns the pointer to the string in r1 unchanged
 #global readString
 readString:
 	push	ra
 	push	a4
-	push	fp
-	
-	mov	fp, sp;since we are allocating stuff on the stack, we need to use the frame pointer
+	push	a5
+	push	a6
 	movi	a4, 0
-	
+	mov	a5, r1
+	mov	a6, r2
+	subi	a6, a6, 1;leave space for null termination
 readStrLoop:
 	;read characters until enter is pressed.
 	;if backspace is pressed, remove one char from the stack
@@ -301,242 +242,55 @@ readStrLoop:
 	bne	r3, r1, readStrChar
 	beq	a4, r0, readStrLoop
 	
-	;remove last input char
+	;remove last input char from string
 	subi	a4, a4, 1
-
-	mov	sp, fp
-	andi	r3, a4, 3
-	sli	r3, r3, 3
-	sri	r2, a4, 2
-	add	sp, sp, r2
-
-	rd	r2, sp, 0
-	movi	r5, 255;0xff
-	shl	r5, r5, r3
-	and	r5, r2, r5
-	xor	r2, r2, r5
-	wr	r2, sp, 0
-
-	;make sure nothing is pushed to the string
-	addi	sp, sp, 1
-
-	;remove printed character
+	;remove printed character from screen
 	call	moveCursorBack
 	movi	r1, 0
 	call	putChar;remove last printed char
 	call	moveCursorBack;make sure we are now printing to recently emptied space
 	
 	br	readStrLoop
-
-
 readStrChar:
-	;normal characters
+	beq	a4, a6, readStrLoop
+
 	;print character
 	push	r1
 	call	printChar
 	pop	r1
 	
-	;calculate address, and correct value for stack pointer
-	mov	sp, fp
-	andi	r3, a4, 3
-	sri	r2, a4, 2
-	add	sp, sp, r2
-	
-	;do a safety check, if r3 == 0, write 0 to string pointer
-	bi	r3, 1
-	wr	r0, sp, 0
+	;set character at current location in thing
+	wrr	r1, a4, a5
+	addi	a4, a4, 1
 
-	;read characters at stack pointer
-	rd	r2, sp, 0
-	;r3 contains the last two bits of a4, which is the byte pointer
-	sli	r3, r3, 3
-	;r3 is now the offset in bits that we need to shift the byte by in order to align it in the word
-
-	;we shift our input character to the proper location
-	shl	r1, r1, r3
-
-	;zero out the location we need to insert the next char in
-	movi	r5, 255;0xff
-	shl	r5, r5, r3
-	and	r5, r2, r5
-	xor	r2, r2, r5
-
-	;insert the char
-	or	r2, r2, r1
-	
-	;write back to string
-	wr	r2, sp, 0
-
-	addi	a4, a4, 1;we have read one additional character
-	addi	sp, sp, 1;make sure we don't push to the string
 	;jump back to loop
 	br	readStrLoop
 readStrEnd:
-	mov	r1, fp
-	mov	r2, a4
-	mov	sp, fp
 	
-	pop	fp
+	;insert null termination
+	wrr	r0, a4, a5
+
+	;print newline
+	movi	r1, C_LF
+	call	printChar
+	movi	r1, C_CR
+	call	printChar
+
+	;return pointer
+	mov	r1, a5
+
+	pop	a6
+	pop	a5
 	pop	a4
 	pop	ra
-	;null termination assurance
-	subi	r3, r2, 1
-	sri	r3, r3, 2
-	add	r3, r3, r1
-	wr	r0, r3, 1
 	ret
 
 ;*************************************************************
-;Define an ascii table
-
-;control characters
-#define C_NUL 0;null
-#define C_SOH 1;start of header
-#define C_STX 2;start of text
-#define C_ETX 3;end of text
-#define C_EOT 4;end of transmission
-#define C_ENQ 5;enquiry
-#define C_ACK 6;acknowledge
-#define C_BEL 7;bell
-#define C_BS  8;backspace
-#define C_TAB 9;horizontal tab
-#define C_LF  10;line feed
-#define C_VT  11;vertical tab
-#define C_FF  12;form feed
-#define C_CR  13;carrige return
-#define C_SO  14;shift out
-#define C_SI  15;shift in
-#define C_DLE 16;data link escape
-#define C_DC1 17;device control 1
-#define C_DC2 18;device control 2
-#define C_DC3 19;device control 3
-#define C_DC4 20;device control 4
-#define C_NAK 21;negative acknowledge
-#define C_SYN 22;synchronous idle
-#define C_ETB 23;end of transmission block
-#define C_CAN 24;cancel
-#define C_EM  25;end of medium
-#define C_SUB 26;substitute
-#define C_ESC 27;escape
-#define C_FS  28;file separator
-#define C_GS  29;group separator
-#define C_RS  30;record separator
-#define C_US  31;unit separator
-
-#define C_SPC 32;space
-#define C_EXC 33;exclamation mark
-#define C_QOT 34;quotation mark
-#define C_NMS 35;number sign
-#define C_DOL 36;dollar sign	
-#define C_PRC 37;percent		
-#define C_AND 38;ampersand		
-#define C_APO 39;apostrofe		
-#define C_RBL 40;round bracket left
-#define C_RBR 41;round bracket right
-#define C_AST 42;asterisk
-#define C_PLS 43;plus		
-#define C_COM 44;comma	
-#define C_HYP 45;hyphen
-#define C_DOT 46;dot		
-#define C_FSH 47;front slash
-
-#define C_0   48
-#define C_1   49
-#define C_2   50
-#define C_3   51
-#define C_4   52
-#define C_5   53
-#define C_6   54
-#define C_7   55
-#define C_8   56
-#define C_9   57
-#define C_COL 58;colon		
-#define C_SCL 59;semicolon
-#define C_LT  60;less-than
-#define C_EQ  61;equals		
-#define C_GT  62;greater-than
-#define C_QST 63;question mark
-#define C_AT  64;at-sign
-#define C_A   65
-#define C_B   66
-#define C_C   67
-#define C_D   68
-#define C_E   69
-#define C_F   70
-#define C_G   71
-#define C_H   72
-#define C_I   73
-#define C_J   74
-#define C_K   75
-#define C_L   76
-#define C_M   77
-#define C_N   78
-#define C_O   79
-#define C_P   80
-#define C_Q   81
-#define C_R   82
-#define C_S   83
-#define C_T   84
-#define C_U   85
-#define C_V   86
-#define C_W   87
-#define C_X   88
-#define C_Y   89
-#define C_Z   90
-#define C_SBL 91;square bracket left	
-#define C_BSH 92;backslash
-#define C_SBR 93;square bracket right		
-#define C_CAR 94;caret		
-#define C_USC 95;underscore			
-#define C_GAC 96;grave accent
-#define C_a   97
-#define C_b   98
-#define C_c   99
-#define C_d   100
-#define C_e   101
-#define C_f   102
-#define C_g   103
-#define C_h   104
-#define C_i   105
-#define C_j   106
-#define C_k   107
-#define C_l   108
-#define C_m   109
-#define C_n   110
-#define C_o   111
-#define C_p   112
-#define C_q   113
-#define C_r   114
-#define C_s   115
-#define C_t   116
-#define C_u   117
-#define C_v   118
-#define C_w   119
-#define C_x   120
-#define C_y   121
-#define C_z   122
-#define C_CBL 123;curly bracket left		
-#define C_VB  124;vertical bar		
-#define C_CBR 125;curly bracket right		
-#define C_TIL 126;tilde
-#define C_DEL 127;delete
-
-#define C_NBSP	255;non-breaking space
 
 .data
-col_ptr:
+screen_pointer:
 	0
-row_ptr:
-	0
-
-col_min:
-	0
-col_max:
-	32
-row_min:
-	0
-row_max:
-	512
+#define screen_max 32
 
 colBackground:
 	0

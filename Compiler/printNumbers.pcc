@@ -1,0 +1,78 @@
+//example code for the compiler
+//this program prints the numbers 12345, 54321, 4711, and 987654321 to the monitor
+
+//assembler libraries that are needed
+def includes : {
+	asm ; 
+	"#include libText.txt"
+	;;
+	return;
+}
+
+//main function of the program
+def main : {
+	char# string;
+	string 20 salloc$ (char#) =;
+	"printing lots of numbers" print$;
+	string 12345 itoa$;
+	string print$;
+	string 54321 itoa$;
+	string print$;
+	string 4711 itoa$;
+	string print$;
+	string 987654321 itoa$;
+	string print$;
+
+	"Done!" print$;
+	while 1;;//infinite loop at program end, since we'd return to some random address in the bootloader if we returned here
+	return;
+}
+
+//prints an integer in string format to the specified pointer
+def itoa char# outStr int x : {
+	int i;
+	i 0 =;
+	while x i 0 == |; {
+		int tmp;
+		tmp x 10 % =;
+		x 10 /=;
+		outStr "0"# tmp(char) + <-;
+		i++;
+		outStr++;
+	}
+	outStr 0 <-;
+	outStr--;
+	i--;
+	while i 0 >; {
+		char tmpchar;
+		tmpchar outStr# =;
+		outStr outStr i - # <-;
+		outStr i - tmpchar <-;
+		i 2 -=;
+		outStr--;
+	}
+	return;
+}
+
+//prints a string to the screen
+def print char# string : {
+	__nosave string;
+	asm string;
+	"push	ra"
+	"call	printStrLn"
+	"pop	ra";;
+	return;
+}
+
+
+//allocates space on the stack
+def salloc int i: int# {
+	int# tmp;
+	__nosave i;
+	asm i;
+	"add	sp, sp, r1"
+	"sub	r1, sp, r1";
+	tmp;
+	return tmp;
+
+}

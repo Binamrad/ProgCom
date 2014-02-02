@@ -1,0 +1,224 @@
+;this is a program that holds the vertical velocity for your spacecraft.
+;when running this program, input the vertical speed you want times 16 in the CCP
+;so, if you want to land at 1 m/s you press these keys, in order:
+;'1' '6' '-' 'enter'
+;to hover, simply enter 0
+
+;to start this program, enter
+;"insert asm lander.txt" in the console
+;then enable TTL (to give the computer control over the throttle) and turn on the computer
+.text
+
+;include all needed libraries
+#include libLabel.txt
+#include libMath.txt
+#include libVectorMath.txt
+#include libFlightHelper.txt
+
+
+;********************************************************************************************
+;***********************************Task handler*********************************************
+;********************************************************************************************
+;this is not a fully functional task switcher, as only the 8 lowest registers +ea, ra, sp, ex are saved
+
+.data
+taskSwapArea:
+#allocate 24
+taskID:
+0
+
+.text
+
+;every time this subroutine is run it switches between the two tasks we are running
+intHandler:
+	;store all variables
+	rd	es, r0, taskID
+	wr	r1, es, taskSwapArea
+	wr	r2, es, taskSwapArea+1
+	wr	r3, es, taskSwapArea+2
+	wr	r4, es, taskSwapArea+3
+	wr	r5, es, taskSwapArea+4
+	wr	r6, es, taskSwapArea+5
+	wr	r7, es, taskSwapArea+6
+	wr	r8, es, taskSwapArea+7
+	wr	ra, es, taskSwapArea+8
+	wr	sp, es, taskSwapArea+9
+	wr	ex, es, taskSwapArea+10
+	wr	ea, es, taskSwapArea+11
+
+	;switch task
+	beq	es, r0, 2
+	movi	es, 0
+	br	3
+	movi	es, 12
+	wr	es, r0, taskID
+
+	;reload variables
+	rd	r1, es, taskSwapArea
+	rd	r2, es, taskSwapArea+1
+	rd	r3, es, taskSwapArea+2
+	rd	r4, es, taskSwapArea+3
+	rd	r5, es, taskSwapArea+4
+	rd	r6, es, taskSwapArea+5
+	rd	r7, es, taskSwapArea+6
+	rd	r8, es, taskSwapArea+7
+	rd	ra, es, taskSwapArea+8
+	rd	sp, es, taskSwapArea+9
+	rd	ex, es, taskSwapArea+10
+	rd	ea, es, taskSwapArea+11
+
+	;return to execution location
+	eret
+
+;********************************************************************************************
+;***********************************Speed Holder*********************************************
+;********************************************************************************************
+
+
+;this bit of code sets the timer max to CPU_CLOCKRATE/60 cycles (1/60 second)
+;and then it sets intHandler to be the interrupt handler, makes sure the second task will run, and enables interrupts
+;lastly, it enters an infinite loop and 
+#global main
+main:
+	movi	r1, 1
+	wr	r1, r0, GLOBAL_NUMPAD_FORMAT	;set numpad 0 to display floating point numbers
+	
+	movil 	r1, CPU_CLOCKRATE		;max number to move for movil is 2097151. CPU_CLOCKRATE wont fit in movi
+	divi	r1, r1, 60
+	wr	r1, r0, GLOBAL_TIMER_MAX
+	
+	movi	r1, intHandler
+	wr	r1, r0, GLOBAL_IADRESS
+
+	;start second task
+	movi	r1, drawAltsInit
+	wr	r1, r0, taskSwapArea+23
+
+	movi	r1, 1	;enable timer interrupts
+	wr	r1, r0, GLOBAL_IENABLE
+
+	;a5-a7 contains direction vector, a8 contains desired speed
+	;we don't need to save their values as this is the starting location for the program.
+	;these registers are never modified elsewhere in the program, so might as well use them here
+	movi 	a5, 0
+	movi 	a6, 1024
+	movi 	a7, 0
+	;init starting speed
+	movi	a8, 0
+
+	;ENTER MAIN LOOP HERE
+	loop:
+	rd	r1, r0, GLOBAL_NUMPAD_NEWIN
+	beq	r1, r0, speedHold
+	wr	r0, r0, GLOBAL_NUMPAD_NEWIN
+	
+	rd	r1, r0, GLOBAL_NUMPAD_IN
+	
+	fflush
+	fpush	r1
+	ftof
+	movi	r1, 16
+	fpush	r1
+	ftof
+	fdiv
+	fpop	r1
+	mov	a8, r1
+	wr	a8, r0, GLOBAL_NUMPAD_OUT
+
+	speedHold:
+	mov	r1, a8
+	call	libfh_holdVertSpeed
+
+	jmp	loop
+
+;**************************************************************************************************
+;********************************Second Task Here**************************************************
+;**************************************************************************************************
+
+drawAltsInit:
+	movi	r1, 1
+	wr	r1, r0, 62959
+drawAlts:
+	rd	r1, r0, GLOBAL_ALTITUDE
+	wr	r1, r0, GLOBAL_NUMPAD_OUT+2
+	rd	r2, r0, GLOBAL_RADARALT
+	wr	r2, r0, GLOBAL_NUMPAD_OUT+1
+	sub	r2, r1, r2
+	wr	r2, r0, GLOBAL_NUMPAD_OUT+3
+	movi	r3, 8000;set this to the maximum altitude of the display
+	divi	r3, r3, 256
+	movi	r6, 256
+
+	;r4 is ship position
+	div	r4, r1, r3
+	sub	r4, r6, r4
+	sli	r4, r4, 3
+
+	;r5 is ground position
+	div	r5, r2, r3
+	sub	r5, r6, r5
+	sli	r5, r5, 3
+
+	;r6 is ending condition
+	movi	r6, 2048
+	;r2 is iterator
+	movi	r2, 0
+drawLoop:
+	;make sure right color is drawn in thing
+	movi	r1, 1
+	beq	r2, r4, 2
+	beq	r2, r5, 1
+	movi	r1, 0
+
+	call	shiftRowLeft
+	addi	r2, r2, 8
+	bne	r2, r6, drawLoop
+	
+	;make sure the more important task will run when we have drawn the screen
+	inti	256
+
+	;goto start
+	br	drawAlts
+
+
+;IN
+;carry in r1
+;row in r2
+;OUT
+;nothing
+shiftRowLeft:
+	rd	r3, r2, GLOBAL_SCREEN
+	rd	r7, r2, GLOBAL_SCREEN +1
+	sri	r3, r3, 1
+	sri	r7, r7, 1
+	or	r3, r3, ex
+	rd	r8, r2, GLOBAL_SCREEN +2
+	wr	r3, r2, GLOBAL_SCREEN
+	sri	r8, r8, 1
+	or	r7, r7, ex
+	rd	r3, r2, GLOBAL_SCREEN +3
+	wr	r7, r2, GLOBAL_SCREEN +1
+	sri	r3, r3, 1
+	or	r8, r8, ex
+	rd	r7, r2, GLOBAL_SCREEN +4
+	wr	r8, r2, GLOBAL_SCREEN +2
+	sri	r7, r7, 1
+	or	r3, r3, ex
+	rd	r8, r2, GLOBAL_SCREEN +5
+	wr	r3, r2, GLOBAL_SCREEN +3
+	sri	r8, r8, 1
+	or	r7, r7, ex
+	rd	r3, r2, GLOBAL_SCREEN +6
+	wr	r7, r2, GLOBAL_SCREEN +4
+	sri	r3, r3, 1
+	or	r8, r8, ex
+	rd	r7, r2, GLOBAL_SCREEN +7
+	wr	r8, r2, GLOBAL_SCREEN +5
+	sri	r7, r7, 1
+	or	r3, r3, ex
+	wr	r3, r2, GLOBAL_SCREEN +6
+	sli	r1, r1, 31
+	or	r7, r7, r1
+	wr	r7, r2, GLOBAL_SCREEN +7
+
+	jmpr	ra
