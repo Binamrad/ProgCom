@@ -1,0 +1,361 @@
+var int room = 1;
+var int lastRoom = 0;
+var int# dirs;
+var char# roomdesc;
+var int itemCount = 0;
+var char## items;
+var int winroom = 16;
+
+var int running = 1;
+var int numactions = 0;
+var int startTime = 0;
+
+//various needed libraries written in assembler
+def __asmincludes : {
+	asm;
+	"#include	libText.txt"
+	;;
+	return;
+}
+
+def main : {
+	char# buffer;
+	buffer 33 salloc$(char#)=;
+	items 10 salloc$(char##)=;
+	dirs 4 salloc$=;
+
+	//clear whatever is on the screen
+	clear_screen$;
+
+	//print initial starting information
+	update_loc$;
+	update_screen$;
+	//set start time	
+	startTime 59(int#)#=;
+	//main loop
+	while running; {
+		//get input, parse it and display any changes made
+		buffer 33 get_input$;
+		buffer parse_input$;
+		update_loc$;
+		update_screen$;
+	}
+	while 1;;//end of program
+	return;
+}
+
+//removes everything from the screen. the screen is set to the color of the text background
+def clear_screen : {
+	
+	int i;
+	i 0 =;
+	while i++ 32 <=; {
+		asm;
+		"push	ra"
+		"call	scr_scroll"
+		"pop	ra"
+		;;
+	}
+	return;
+}
+
+//allocates space on the stack
+def salloc int len : int# {
+	int# pointer;
+	__nosave len;
+	asm len;
+	"add	sp, sp, r1"
+	"sub	r1, sp, r1";
+	pointer;
+	return pointer;
+}
+
+//prints a string to the screen
+def prints char# string : {
+	asm string;
+	"push	ra"
+	"call	printStrLn"
+	"pop	ra";;
+	return;
+}
+
+//reads a string from the keyboard
+def get_input char# buffer int buflen: {
+	asm buffer buflen;
+	"push	ra"
+	"call	readString"
+	"pop	ra";;
+	return;
+}
+
+//parses the input and makes appropriate changes in response
+def parse_input char# string: {
+	numactions++;
+	//if west, check if we can go west and move us there
+	if "north" string str_cmp$; {
+		if dirs#; {
+			room dirs# =;
+			"You went north" prints$;
+		} else "You can't go that way!" prints$;
+	} else if "east" string str_cmp$; {
+		if dirs 1+#; {
+			room dirs 1+# =;
+			"You went east" prints$;
+		} else "You can't go that way!" prints$;
+	} else if "south" string str_cmp$; {
+		if dirs 2+#; {
+			room dirs 2+# =;
+			"You went south" prints$;
+		} else "You can't go that way!" prints$;
+	} else if "west" string str_cmp$; {
+		if dirs 3+#; {
+			room dirs 3+# =;
+			"You went west" prints$;
+		} else "You can't go that way!" prints$;
+	} else if "clear" string str_cmp$; {
+		clear_screen$;
+		numactions--;
+	} else if "look" string str_cmp$; {
+		lastRoom 0 =;
+	} else if "help" string str_cmp$; {
+		"available commands are:" prints$;
+		"north" prints$;
+		"west" prints$;
+		"south" prints$;
+		"east" prints$;
+		"look" prints$;
+		"clear" prints$;
+		"help" prints$;
+		"\n\raYour task is to get to the end of the maze" prints$;
+		numactions--;
+	} else {
+		"Unrecognised command" prints$;
+		numactions--;
+	}
+	return;
+}
+
+//compares two strings and returns true (1) if they are equal
+def str_cmp char# string1 string2 : int {
+	while string1#; {
+		if string2# string1# !=; {
+			return 0;
+		}
+		string1++;
+		string2++;
+	}
+	//at this point we only need to check if string2# is also 0
+	return string1# string2# ==;
+}
+
+//updates the current room information to correspond to the current room
+def update_loc : {
+	if room 1 ==; {
+		roomdesc "you are in room 1"=;
+		dirs 5<-;
+		dirs 1+ 2<-;
+		dirs 2+ 0<-;
+		dirs 3+ 0<-;
+	} else if room 2 ==; {
+		roomdesc "you are in room 2"=;
+		dirs 0<-;
+		dirs 1+ 0<-;
+		dirs 2+ 0<-;
+		dirs 3+ 1<-;
+	} else if room 3 ==; {
+		roomdesc "you are in room 3"=;
+		dirs 0<-;
+		dirs 1+ 4<-;
+		dirs 2+ 0<-;
+		dirs 3+ 0<-;
+	} else if room 4 ==; {
+		roomdesc "you are in room 4"=;
+		dirs 8<-;
+		dirs 1+ 0<-;
+		dirs 2+ 0<-;
+		dirs 3+ 3<-;
+	} else if room 5 ==; {
+		roomdesc "you are in room 5"=;
+		dirs 9<-;
+		dirs 1+ 0<-;
+		dirs 2+ 1<-;
+		dirs 3+ 0<-;
+	} else if room 6 ==; {
+		roomdesc "you are in room 6"=;
+		dirs 10<-;
+		dirs 1+ 7<-;
+		dirs 2+ 0<-;
+		dirs 3+ 0<-;
+	} else if room 7 ==; {
+		roomdesc "you are in room 7"=;
+		dirs 11<-;
+		dirs 1+ 8<-;
+		dirs 2+ 0<-;
+		dirs 3+ 6<-;
+	} else if room 8 ==; {
+		roomdesc "you are in room 8"=;
+		dirs 0<-;
+		dirs 1+ 0<-;
+		dirs 2+ 4<-;
+		dirs 3+ 7<-;
+	} else if room 9 ==; {
+		roomdesc "you are in room 9"=;
+		dirs 13<-;
+		dirs 1+ 10<-;
+		dirs 2+ 5<-;
+		dirs 3+ 0<-;
+	} else if room 10 ==; {
+		roomdesc "you are in room 10"=;
+		dirs 14<-;
+		dirs 1+ 0<-;
+		dirs 2+ 6<-;
+		dirs 3+ 9<-;
+	} else if room 11 ==; {
+		roomdesc "you are in room 11"=;
+		dirs 0<-;
+		dirs 1+ 12<-;
+		dirs 2+ 7<-;
+		dirs 3+ 0<-;
+	} else if room 12 ==; {
+		roomdesc "you are in room 12"=;
+		dirs 16<-;
+		dirs 1+ 0<-;
+		dirs 2+ 0<-;
+		dirs 3+ 11<-;
+	} else if room 13 ==; {
+		roomdesc "you are in room 13"=;
+		dirs 0<-;
+		dirs 1+ 0<-;
+		dirs 2+ 9<-;
+		dirs 3+ 0<-;
+	} else if room 14 ==; {
+		roomdesc "you are in room 14"=;
+		dirs 0<-;
+		dirs 1+ 15<-;
+		dirs 2+ 10<-;
+		dirs 3+ 0<-;
+	} else if room 15 ==; {
+		roomdesc "you are in room 15"=;
+		dirs 0<-;
+		dirs 1+ 0<-;
+		dirs 2+ 0<-;
+		dirs 3+ 14<-;
+	} else if room 16 ==; {
+		roomdesc "you are in room 16"=;
+		dirs 0<-;
+		dirs 1+ 0<-;
+		dirs 2+ 12<-;
+		dirs 3+ 0<-;
+	}
+	return;
+}
+
+//sets the background color for font rendering
+def set_background_colour int col : {
+	asm col;
+	"push	ra"//this is probably not neccessary
+	"call	setBgCol"
+	"pop	ra"
+	;;
+	return;
+}
+
+//turns and integer into a string and stores the string in the provided buffer
+def itoa char# outStr int x : {
+	int i;
+	i 0 =;
+	while x i 0 == |; {
+		int tmp;
+		tmp x 10 % =;
+		x 10 /=;
+		outStr "0"# tmp(char) + <-;
+		i++;
+		outStr++;
+	}
+	//zero-terminate the string
+	outStr 0 <-;
+	outStr--;
+	//reverse the string, except for terminating zero
+	i--;
+	while i 0 >; {
+		char tmpchar;
+		tmpchar outStr# =;
+		outStr outStr i - # <-;
+		outStr i - tmpchar <-;
+		i 2 -=;
+		outStr--;
+	}
+	return;
+}
+
+
+def update_screen : {
+	//we don't need to update this if we have already printed this room
+	if lastRoom room == ; { return;}
+	lastRoom room =;
+	//print room description
+	roomdesc prints$;
+	//print all items if there are any in this room
+	if itemCount; {
+		"You see" prints$;
+		int i;
+		i itemCount =;
+		while i---; {
+			items i+# prints$;
+		}
+	}
+	if winroom room ==; {
+		//store the time to complete the game
+		startTime 59(int#)# startTime - 384000 / =;
+
+		//do some cool stuff to the screen
+		int x y;
+		x 0 =;
+		while x++ 6 <=; {
+			y 0 =;
+			while y 16 <; {
+				y set_background_colour$;
+				"                                " prints$;
+				y++;
+				i 16000 =;//delay loop
+				while i--;;
+			}
+		}
+		0 set_background_colour$;
+
+		char# cp;
+		cp 30 salloc$(char#)=;
+		"Congratulations!" prints$;
+		"You have reached the end of the maze!" prints$;
+		"It took you" prints$;
+		cp numactions itoa$;
+		cp prints$;
+		"actions and" prints$;
+		cp startTime itoa$;
+		cp prints$;
+		"seconds to reach the end.\n\r" prints$;
+
+		"play again? (y/n)" prints$;
+	
+		cp 2 get_input$;
+		if cp# "y"# ==; {
+			numactions 0 =;
+			lastRoom 0 =;
+			room 1 =;
+			update_loc$;
+			clear_screen$;
+			update_screen$;
+			startTime 59(int#)#=;
+		} else {
+			running 0 =;
+		}
+	} else {
+		//print where the exits in this room are
+		"Exits are:" prints$;
+		if dirs#; "north" prints$;
+		if dirs 1+#; "east" prints$;
+		if dirs 2+#; "south" prints$;
+		if dirs 3+#; "west" prints$;
+	}
+	return;
+}

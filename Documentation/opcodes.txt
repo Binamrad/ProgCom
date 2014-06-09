@@ -19,13 +19,12 @@ instruction name:	the name of the instruction as it is used in assembly code
 cycles:			the number of cycles the cpu need to execute the instruction
 rA:			an arbitrary register
 rB:			an arbitrary register
-address/const/rC:	an address, a constant or an arbitrary register
+address/const/rC:	an address, a constant or a register
 pc-relative:		does the instruction use pc-relative addressing?
 opcode:			the value that is contained in the instruction field
 addr. field:		some instructions use the address field as a part of the opcode or as a non-specified argument.
 
 notes:
-at the moment att branching instructions use the absolute address of the destination**
 if rA and/or rB are unused, their value is generally 0. (exception only at movil).
 
 general instructions:

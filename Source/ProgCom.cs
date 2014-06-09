@@ -10,17 +10,14 @@ namespace ProgCom
     //runs a simulated version of an imaginary processor.
     /*
      * TODO:
-     * move interrupts/numpad to new hardware interface <- done/wait
-     * add additional instructions; additional partial moves and other things <-done/wait
-     * additional peripherals: radar altitudimeter, target relative position etc. <- done/wait
-     * overhaul cache memory <- done
-     * improve keyboard interface <- done?
-     * make sure "interrupts enabled" and "interrupt processing" are separated <- done?
-     * fix weirdness with gui objects <- wait
-     * screen drawing interrupts <- wait
-     * text offset registers <- wait
-     * more comparison instructions <- wait
-     * memory management <- wait
+     * move numpad to new hardware interface <- done-ish, move numpad out of progcom class next
+     * add additional instructions; comparison operations
+     * additional peripherals: target relative position etc.
+     * improve keyboard interface <- interrupts?
+     * fix weirdness with gui objects
+     * screen drawing interrupts
+     * text offset registers
+     * memory management
      */
     public class ProgCom : PartModule
     {
@@ -210,9 +207,10 @@ namespace ProgCom
 
         protected void onFlightStart()
         {
+            //print("FLIGHT STARDER FROM PROGCOM");
             //called at load at launchpad
             if (!shipHasOtherActiveComputer()) {
-                print("ProgCom initialised!");
+                //print("ProgCom initialised!");
                 partActive = true;
                 
                 //add the gui iff the vessel is the active vessel.
@@ -252,7 +250,7 @@ namespace ProgCom
 
         private void init()
         {
-            print("PROGCOM INITIALISING");
+            //print("PROGCOM INITIALISING");
             //initialise cpu-emulator
             //lastLoaded = 128;
             CPU = new CPUem();
@@ -271,6 +269,7 @@ namespace ProgCom
 
             //connect tapedrive. When possible, add tape drive to appropriate stuff
             CPU.hwConnect(tapeDrive);
+            CPU.hwConnect(ConsoleMemWrapper);
 
             running = false;
             
@@ -278,7 +277,7 @@ namespace ProgCom
             foreach (PartModule pm in this.part.Modules) {
                 if (pm == this) continue;
                 if (pm is IPCHardware) {
-                    print("HARDWARE IS FOUND");
+                    //print("HARDWARE IS FOUND");
                     try {
                         CPU.hwConnect((IPCHardware)pm);
                     }
@@ -331,6 +330,7 @@ namespace ProgCom
         //perform CPU cycling and the like here
         public override void OnUpdate()
         {
+            base.OnUpdate();
             if (CPU.hasErrors) {
                 CPU.hasErrors = false;
                 foreach (String s in CPU.errorMessages) {
@@ -338,8 +338,6 @@ namespace ProgCom
                     CPU.errorMessages.Clear();
                 }
             }
-
-            base.OnUpdate();
 
             //we must make sure that, if the vessel is gains or loses focus, that the gui responds accordingly
             if (partGUI == true && !vessel.isActiveVessel) {
@@ -368,7 +366,7 @@ namespace ProgCom
                 float time = UnityEngine.Time.deltaTime;
                 cyclesPending += debug ? 1 : (int)(time * CPU.ClockRate);
                 if (cyclesPending > CPU.ClockRate) {
-                    cyclesPending = CPU.ClockRate;//to prevent lockup bugs due to ever-esclalating clock-cycles per update
+                    cyclesPending = CPU.ClockRate;//to prevent lockup bugs due to ever-escalating clock-cycles per update
                 }
                 cyclesPending -= cycle(cyclesPending);//Run as many cycles as we can, while correcting for instructions that might run for longer than allowed
             }
@@ -377,7 +375,51 @@ namespace ProgCom
 
         /***********************' GUI code here ****************************/
 
+        //memory wrapper for the console
+        private class PCConsole : IPCHardware
+        {
+            private Int32[] mem = new Int32[9];
+            private const UInt16 address = 32;
+            public void connect() {
+                for (int i = 0; i < 9; ++i) {
+                    mem[i] = 0;
+                }
+            }
+
+            public void disconnect() { }
+
+            public Tuple<ushort, int> getSegment(int id)
+            {
+                return new Tuple<ushort, int>(32, 9);
+            }
+
+            public int getSegmentCount()
+            {
+                return 1;
+            }
+
+            public void recInterruptHandle(InterruptHandle seg)
+            {
+            }
+
+            public int memRead(ushort position)
+            {
+                return mem[position-address];
+            }
+
+            public void memWrite(ushort position, int value)
+            {
+                mem[position - address] = value;
+            }
+
+            public void tick(int ticks)
+            {
+            }
+        }
+
+
         //bool showGUI = true;
+        PCConsole ConsoleMemWrapper = new PCConsole();
         GUIStates GUIstate = new GUIStates();
         int numpadInput = 0;
         String currentText = "";
@@ -524,9 +566,9 @@ namespace ProgCom
                 }
                 if (GUILayout.Button("Enter", mySty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                         {
-                    CPU.Memory[37] = numpadInput;
-                    numpadInput = 0;
-                    CPU.Memory[38] = 1;
+                            ConsoleMemWrapper.memWrite(37, numpadInput);
+                            numpadInput = 0;
+                            ConsoleMemWrapper.memWrite(38, 1);
                 }
                 if (GUILayout.Button("+", mySty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                         {
@@ -576,9 +618,9 @@ namespace ProgCom
 
         private String memWrFormat(int i, int pos)
         {
-            if ((CPU.Memory[39] & (0x3 << (pos << 1))) == 0)
-                return "" + CPU.Memory[i];
-            else return "" + (float)Util.itof(CPU.Memory[i]);
+            if ((ConsoleMemWrapper.memRead(39) & (0x3 << (pos << 1))) == 0)
+                return "" + ConsoleMemWrapper.memRead((ushort)i);
+            else return "" + (float)Util.itof(ConsoleMemWrapper.memRead((ushort)i));
         }
 
         private void parseInput(String s)

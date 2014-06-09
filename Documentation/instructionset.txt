@@ -25,29 +25,32 @@ a0->a12 	register 16 to 28. Can be used exactly as the other registers, they jus
 
 Other registers:
 	ra (Return Address)	is set to pc when call/callr is used and pc-1 when loop is used.
-	sp (Stack Pointer)	is used by the push/pop instructions. Should be set to point at a stack.
-	fp (Frame Pointer)
+	sp (Stack Pointer)	is used by the push/pop instructions. Should always be set to point at a stack.
+	fp (Frame Pointer)	used to store/restore the stack pointer.
 	ex (EXtra)		contains overflow/underflow from addition, subtraction, multiplication and bitshifting. It also contains the remainder after division.
 	es (Exception Status)	when an interrupt is triggered this register is set to the interrupt number
 	ea (Exception Address)	when an interrupt is triggered this register is set to pc
-	pc (Program Counter)	points to the next instruction
+	pc (Program Counter)	points to the next instruction. cannot be explicitly used in an instruction.
 
 
 Instructions:
+
+Components of instructions:
 
 rA = first register specified
 rB = second register specified
 rC = third register specified
 C  = constant, 16-bit unsigned integer
 lC = long constant, 21-bit unsigned integer
-pc = program counter, 16-bit unsigned integer
+pc = program counter, 16-bit unsigned integer (never explicitly specified)
 
 Most instructions are written on the form
-"instruction rA rB rC/C/lC"
-sometimes one or several are left out, but they are always listed in that order.
+"instruction rA rB rC/C" (Eg. "add	r1, r2, r3" or "subi	r1, r2, 4")
+rA is usually the destination register, and rB and rC/C are operands. Exceptions are in branching instructions (rA and rB are compared and rC/C is destination) and various other misc. instructions.
+rA, rB and rC/C are named after the order they appear in the opcodes. Some instructions do not use all three registers, but they are always specified in that order (rA, rB, rC/C/lC).
 the constant can be declared as a hexadecimal number (prefixed with 0x), a binary number(prefixed with 0b) or a base-10 number (no prefix)
 
-Name:		Meaning:			Result:				Example:
+Name:		Verbose:			Result:				Example:
 
 add		ADD				rA = rB + rC			add	r1, r2, r3
 addi		ADD Immediate			rA = rB + C			addi	r1, r2, 4
@@ -73,7 +76,7 @@ or		bitwise OR			rA = rB | rC			or	r1, r2, r3
 ori		bitwise OR Immediate		rA = rB ^ C			ori	r1, r2, 4
 xor		bitwise XOR			rA = rB ^ rC			xor	r1, r2, r3
 xori		botwise XOR Immediate		rA = rB ^ C			xori	r1, r2, 4
-not		Not				rC = rC ^ -1			not	r1
+not		NOT				rC = rC ^ -1			not	r1
 br		BRanch				pc += C				br	label
 brr		BRanch Register			pc += rC			brr	r1
 jmp		JuMP				pc = C				jmp	label
@@ -96,39 +99,40 @@ flcmp		FLoating point CoMPare		rA = -1 if rB < rC, rA = 0 if rB == rC, else rA =
 int/inti	INTerrupt/INT. Immediate	if exceptions are enabled, this spawns an exception and copies the argument to register es (ea = pc, es = rC, pc = GLOBAL_IADRESS if GLOBAL_IENABLE & 1 == 1) 
 eret		Exception RETurn		pc = ea, enables interrupts.	eret
 
-floating point instructions:
+Floating point instructions:
+The floating point instructions operate on the floating point unit stacks. There are two stacks available.
 The operands in the floating point operations are ordered like this: (top-1) * top, (top-1) - top, (top-1) / top, (top-1) + top.
 note that both floating point stacks can perform operations simultaneously, and that the cpu does not have to wait for them to finish their operations, unless using the fpush/fpop instructions
 
-Name:		Meaning:
-
-fpush		push rA to floating point stack
-fpush1		push floating point 1 to floating point stack
-fpushn1		push floating point -1 to floating point stack
-fpushpi		push floating point pi to floating point stack
-fpop		rA = top of floating point stack
-fadd		pop two numbers from stack, perform addition, push result to stack
-fsub		pop two numbers from stack, perform subtraction, push result to stack
-fmul		pop two numbers from stack, perform multiplication, push result to stack
-fdiv		pop two numbers from stack, perform division, push result to stack
-fsel0		select floating point stack 0
-fsel1		select floating point stack 1
-fmerge		adds the top number of stack 0 to top number of stack 1, result pushed to stack 0
-ftof		converts the integer at the top of the stack to a floating point number, and pushes on the stack
-ftoi		converts the floating point number at the top of the stack to integer, and pushes on the stack
-fflush		removes all entries from the selected floating point stack and aborts all operations
-fss		retreives some information on the floating point unit: the high half word contains the currently selected stack, the low half word contains the stack pointer
+Name:		Verbose:												Example:
+		
+fpush		push rA to floating point stack										fpush	r1
+fpush1		push floating point 1 to floating point stack								fpush1
+fpushn1		push floating point -1 to floating point stack								fpushn1
+fpushpi		push floating point pi to floating point stack								fpushpi
+fpop		rA = top of floating point stack									fpop	r1
+fadd		pop two numbers from stack, perform addition, push result to stack					fadd
+fsub		pop two numbers from stack, perform subtraction, push result to stack					fsub
+fmul		pop two numbers from stack, perform multiplication, push result to stack				fmul
+fdiv		pop two numbers from stack, perform division, push result to stack					fdiv
+fsel0		select floating point stack 0										fsel0
+fsel1		select floating point stack 1										fsel1
+fmerge		adds the top number of stack 0 to top number of stack 1, result pushed to stack 0			fmerge
+ftof		converts the integer at the top of the stack to a floating point number, and pushes on the stack	ftof
+ftoi		converts the floating point number at the top of the stack to integer, and pushes on the stack		ftoi
+fflush		removes all entries from the selected floating point stack and aborts all operations			fflush
+fss		sets the high half word of rA to the selected stack, the low half word is set to the stack pointer	fss	r1
 
 Extended instruction set:
-please be aware that the assembler is not good at using these instructions yet, so don't put a constant higher than 255
-in them or you will use the wrong instruction
+please be aware that the assembler is not good at using these instructions yet. If you use a constant higher than 255
+the assembler WILL NOT output a correct instruction
 
-Name:		Meaning:			Result:
+Name:		Verbose:			Result:								Example:
 
-movb/movbr	MOVe Byte			replace byte C/rC of rA with byte C/rC of rB
-movhw/movhwr	MOVe Half-Word			replace half-word C/rC of rA with half-word C/rC of rB
-movbl/movblr	MOV Byte Low			replace byte C/rC of rA with byte 0 of rB
-movhwl/movhwlr	MOVe Half-Word Low		replace half-word C/rC of rA with half-word 0 of rB
+movb/movbr	MOVe Byte 			replace byte C/rC of rA with byte C/rC of rB			movb	r1, r2, 4
+movhw/movhwr	MOVe Half-Word			replace half-word C/rC of rA with half-word C/rC of rB		movhw	r1, r2, 0
+movbl/movblr	MOV Byte Low			replace byte C/rC of rA with byte 0 of rB			movbl	r1, r2, 4
+movhwl/movhwlr	MOVe Half-Word Low		replace half-word C/rC of rA with half-word 0 of rB		movhwl	r1, r2, 0
 
 
 Interrupts:
@@ -224,7 +228,7 @@ example:
 Will put number of zero - initialised integers where the #allocate statement was placed. It can only be placed in the .data section.
 
 #string "<string>"
-will put the specified string into memory in ascii format using 4 chars per word. It will also add null-termination.
+will put the specified string into memory in ascii format using one character per word. It will also add null-termination.
 the string will be read from the first " to the last ", anything else will be regarded as a comment
 the following escape sequences are supported:
 	\n	line feed
@@ -238,9 +242,9 @@ the following escape sequences are supported:
 the string must be spacified across a single line
 this keyword can only be placed in the .data section
 
-#stringw "<string>"
-the same as #string, except it uses one character per word instead of four characters per word.
-this makes strings easier to use, at the expense of them using more memory.
+#string_compact "<string>"
+the same as #string, except it uses 4 chars per word instead of one
+this makes strings consume less memory, at the expense of being slightly harder to use.
 note that the example code expects the "#string"-strings
 
 #macro <macroname> <parameters> {
@@ -253,24 +257,25 @@ example:
 	add	rA, rA, rB
 	add	rA, rA, rC
 }
+add3	r1, r2, r3;this code works
 
 the parameters specified in the macro definition are changed using a primitive
-find-and-replace on the old parameters using the new, so don't ever do this:
+find-and-replace on the old parameters using the new, so if a macro is structured like this:
 #macro foo rA rAA {
 or this:
 #macro foo r1 r2 r3 {
-if you do, there is the possibility that the compiler can't read the lines the macro produces, which can cause confusing error messages.
-you can not use macros within macros yet.
+there the assembler might not be able to understand the instructions the macro produces, which can cause confusing error messages.
+you can not use macroinstructions within macro declarations yet.
 
 #define <defineName> <number>
 will substitute <defineName> with <number> when used as a parameter
 example:
 #define foo 16
-movi	r1, foo
+movi	r1, foo;equivalent to "movi	r1, 16"
 .data
-	foo
+	foo;equivalent to "16"
 
-#literal <constant> will place the constant evaluated as a word in the program exactly where it is placed.
+#literal <constant> will place the constant evaluated as a literal in the program exactly where it is placed.
 It is intended for putting arbitrary data into the .text section.
 can only be used in the .text section.
 

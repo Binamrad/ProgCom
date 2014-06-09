@@ -1,3 +1,41 @@
+v.0.10.4
+Fixed a bug with the compiler where function parameters would get loaded incorrectly in certain circumstances
+Fixed minor bug in the compiler that prevented temporary variables from being reused after using the "<-" operator
+Some error messages from the compiler are slightly more useful
+Fixed a minor bug with the text printing library
+Some errors in the documentation have been corrected and some sections have been clarified
+More code examples have been added and some of the previous samples have been properly commented
+The assembler now uses the correct opcode for the "inti" instruction
+The compiler now properly recognises the "!=" operator
+Several minor issues with the compiler have been resolved
+Added an include statement to the compiler
+A major issue regarding writing to the tape drive has been resolved
+Some minor issues regarding the tape drive status flags have been resolved
+The monitor has been optimised
+The clock now uses two words to track the time, making the computer able to keep track of 4294967295 times longer timespans
+The documentation has been clarified somewhat in some places
+The order in which assignment to destination register and "ex" occurs in arithmetic operations has been reversed, so ex can now be used as the destination register for operations with the expected result
+The 8-bit instruction macros from libExtnd.txt have now been properly implemented
+
+
+v.0.10.3
+Fixed an error that gave a NullPointerException in the VAB
+the non-radial progcom part lacked certain modules, they have now been added
+you can now use labels as data in the data section. Their value is always the absolute address of the label, even if not available
+some error messages regarding labels are now more informative
+
+
+v.0.10.2
+Fixed an error that occured while writing to the last 8 addresses in memory
+The gamedata folder now has a better folder layout
+fixed a few error messages in the compiler
+clarified the documentation regarding the default color values for the monitor
+
+
+v.0.10.1
+Fixed the incorrect part definitions from update 0.10
+
+
 v.0.10
 removed the r13, r14, r15, a15, a14, a13 register names in order to make things less confusing. The only register that can be accessed by two names now is r0, which also is called "zero"
 moved ex to a normal register. This made the ax, sx, rdx, bx instructions redundant, and they have been removed

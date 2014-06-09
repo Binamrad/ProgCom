@@ -8,10 +8,11 @@ namespace ProgCom
     //this doesn't extend the partmodule thingamajig since I want this to always be present in the CPU
     class PCTimer : IPCHardware
     {
-        UInt32[] memarea = new UInt32[3];
+        UInt32[] memarea = new UInt32[4];
         UInt16 address = 59;
         InterruptHandle inth;
         const int timerOverflow = 256;
+        UInt64 clock = 0;
 
         public void connect()
         {
@@ -25,7 +26,7 @@ namespace ProgCom
 
         public Tuple<ushort, int> getSegment(int id)
         {
-            return new Tuple<UInt16, int>(address, 3);
+            return new Tuple<UInt16, int>(address, 4);
         }
 
         public int getSegmentCount()
@@ -51,7 +52,9 @@ namespace ProgCom
 
         public void tick(int ticks)
         {
-            memarea[0] += (uint)ticks;
+            clock += (uint)ticks;
+            memarea[0] = (uint)clock;
+            memarea[3] = (uint)(clock>>32);
             memarea[1] += (uint)ticks;
             if (memarea[1] >= memarea[2] && memarea[2] > 0) {
                 memarea[1] %= memarea[2];

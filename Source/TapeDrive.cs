@@ -24,14 +24,17 @@ namespace ProgCom
     public class TapeDrive : PartModule, IPCHardware
     {
         //this should probably be done with an enum
-        private const int IBF = 0;//input buffer full
-        private const int OBE = 1;//output buffer empty
-        private const int IE = 2;//interrupt enable
-        private const int BUSY = 3;//busy
-        private const int WBF = 4;//write buffer full
-        private const int RBF = 5;//read buffer full
-        private const int WRITING = 6;//writing stuff to tape
-        private const int IOB = 7;//interrupt on OBE
+        private const int IBF = 0;      //input buffer full
+        private const int OBE = 1;      //output buffer empty
+        private const int IE = 2;       //interrupt enable
+        private const int BUSY = 3;     //busy
+        private const int WBF = 4;      //write buffer full
+        private const int RBF = 5;      //read buffer full
+        private const int WRITING = 6;  //writing stuff to tape
+        private const int IOB = 7;      //interrupt on OBE
+        private const int READING = 8;  //reading stuff from tape
+        private const int SEEKING = 9;  //winding the tape
+        private const int IIB = 10;     //interrupt on IBF
         private const int NOTIFYINTERRUPT = 260;
         private const int ERRORINTERRUPT = 261;
 
@@ -42,7 +45,8 @@ namespace ProgCom
         bool reading, writing, seeking;
         bool readable, writeable;
         int toRead = 0;
-        int toWrite = 0;
+        int toWrite = 0;    //how many words we should take from write cache and put on tape
+        int recToWrite = 0; //how many words we should receive and put in write cache
         int seekTarget = 0;
         int pointer = 0;
         int cacheMaxSize = 32;
@@ -96,28 +100,35 @@ namespace ProgCom
                     reading = true;
                     toRead = high3bytes;
                     setStatus(BUSY, true);
+                    setStatus(READING, true);
                     break;
                 case 2://seek to high 3
                     if (getStatus(BUSY)) { busyException(); break; }
                     seeking = true;
                     seekTarget = high3bytes;
                     setStatus(BUSY, true);
+                    setStatus(SEEKING, true);
                     break;
                 case 3://write high 3 to mem
                     if (getStatus(BUSY)) { busyException(); break; }
                     writing = true;
                     toWrite = high3bytes;
+                    recToWrite = high3bytes;
                     setStatus(WRITING, true);
+                    //setStatus(BUSY, true);//we don't enable busy until after all words have been written, since busy signifies "don't send anything"
                     break;
                 case 4://abort current task
                     setStatus(BUSY, false);
                     setStatus(WRITING, false);
+                    setStatus(READING, false);
+                    setStatus(SEEKING, false);
                     writing = false;
                     reading = false;
                     seeking = false;
                     cyclesToNext = cyclesPerInt;
                     toWrite = 0;
                     toRead = 0;
+                    recToWrite = 0;
                     seekTarget = pointer;
                     break;
                 case 5://is a tape inserted?
@@ -165,6 +176,8 @@ namespace ProgCom
                     //set seek position
                     seekTarget = pointer + high3bytes;
                     seeking = true;
+                    setStatus(SEEKING, true);
+                    setStatus(BUSY, true);
                     break;
                 case 12:
                     if (getStatus(BUSY)) { busyException(); break; }
@@ -256,8 +269,8 @@ namespace ProgCom
             lastRecA = position;
             position -= baseAddress;
             if(position == 2) {
-                memarea[2] ^= memarea[2] & 2;
-                memarea[2] |= value & 2;
+                memarea[2] ^= memarea[2] & ((1<<IE) | (1<<IOB) | (1<<IIB));
+                memarea[2] |= value & ((1<<IE) | (1<<IOB) | (1<<IIB));
             } else if (position == 0) {
                 memarea[0] = value;
                 setStatus(OBE, false);
@@ -274,7 +287,7 @@ namespace ProgCom
                 inth.interrupt(ERRORINTERRUPT);
             }
             //if interrupts from things happened, stuff
-            if (getStatus(IE) && ( getStatus(IBF) || ( getStatus(IOB) && getStatus(OBE) ) )) {
+            if (getStatus(IE) && ( ( getStatus(IBF) && getStatus(IIB) ) || ( getStatus(IOB) && getStatus(OBE) ) )) {
                 inth.interrupt(NOTIFYINTERRUPT);
             }
         }
@@ -283,10 +296,13 @@ namespace ProgCom
         {
             if (!getStatus(OBE)) {
                 //check if we are filling up our buffer for stuff. if so, put on buffer
-                if (toWrite > 0) {
+                if (recToWrite > 0) {
                     if (writeCache.Count < cacheMaxSize) {//if buffer is full, do nothing
                         writeCache.AddFirst(memarea[0]);
-                        --toWrite;
+                        --recToWrite;
+                        if (recToWrite == 0) {
+                            setStatus(BUSY, true);
+                        }
                         setStatus(OBE, true);
                     }
                 } else {
@@ -315,6 +331,7 @@ namespace ProgCom
                         reading = false;
                         cyclesToNext = cyclesPerInt;
                         setStatus(BUSY, false);
+                        setStatus(READING, false);
                     } else {
                         cyclesToNext += cyclesPerInt;
                     }
@@ -329,6 +346,7 @@ namespace ProgCom
                         writing = false;
                         cyclesToNext = cyclesPerInt;
                         setStatus(WRITING, false);
+                        setStatus(BUSY, false);
                     } else {
                         cyclesToNext += cyclesPerInt;
                     }
@@ -346,20 +364,13 @@ namespace ProgCom
                         seeking = false;
                         cyclesToNext = cyclesPerInt;
                         setStatus(BUSY, false);
+                        setStatus(SEEKING, false);
                     }
 
                 }
             }
         }
 
-        //status table:
-        /* 0: IBF
-         * 1: OBE
-         * 2: IENABLE
-         * 3: busy
-         * 4: OCF
-         * 5: ICF
-         * */
         private void setStatus(int statusIndex, bool status)
         {
             int i = 1 << statusIndex;

@@ -14,26 +14,31 @@ namespace ProgCom
         UInt16 charSetPtr;
         UInt16 colorPointer;
         UInt16 modePtr;
-        Color[] colors;
+        Color32[] colors;
+        Color32[] imageBuffer;
         protected int windowID;
         UInt16 address = 62959;
         GUIStates guis = new GUIStates();
+        bool updateScreen = false;
+        bool updateCols = false;
+
 
         public override void  OnStart(PartModule.StartState state) {
  	        base.OnStart(state);
+            if (state.Equals(PartModule.StartState.Editor)) return;//don't start stuff in the editor
             windowID = Util.random();
-
             mem = new Int32[2577];
             pointer = 529;
             charSetPtr = 17;
-            colors = new Color[16];
+            colors = new Color32[16];
             modePtr = 0;
             for (int i = 0; i < 16; ++i) {
-                colors[i] = new Color();
-                colors[i].a = 1.0f;
+                colors[i] = new Color32();
+                colors[i].a = 255;
             }
             colorPointer = 1;
 
+            imageBuffer = new Color32[256*256];
             image = new Texture2D(256, 256, TextureFormat.ARGB32, false);
             windowPos = new Rect();
             if ((windowPos.x == 0) && (windowPos.y == 0))//windowPos is used to position the GUI window, lets set it in the center of the screen
@@ -48,7 +53,7 @@ namespace ProgCom
             }
             image.Apply();
 
-            //init monitor drarwing
+            //init monitor drawing
             RenderingManager.AddToPostDrawQueue(3, new Callback(draw));
 
             //initialise fonts and colors and things
@@ -63,27 +68,47 @@ namespace ProgCom
                 mem[index] = col;
                 ++index;
             }
+            updateColors();
         }
 
         private void updateColors()
         {
             for (int i = 0; i < 16; ++i) {
                 int colData = mem[colorPointer + i];
-                colors[i].b = (colData & 0xff) / 255.0f;
-                colors[i].g = ((colData >> 8) & 0xff) / 255.0f;
-                colors[i].r = ((colData >> 16) & 0xff) / 255.0f;
+                colors[i].b = (byte)colData;
+                colors[i].g = (byte)(colData >> 8);
+                colors[i].r = (byte)(colData >> 16);
             }
         }
 
+        private float dTime = 0.0f;
+        private const float redrawTime = 1.0f / 30.0f;
+
         void drawImage()
         {
-            updateColors();
+            //lock screen to 30fps
+            dTime += UnityEngine.Time.deltaTime;
+            if (dTime < redrawTime) return;
+            while (dTime >= redrawTime) {
+                dTime -= redrawTime;//this step is in a while loop to adjust for slow refresh rates (ie game runs at less than 30fps)
+            }
+
+            if (!updateScreen) {
+                return;
+            } else {
+                updateScreen = false;
+            }
+            if (updateCols) {
+                updateColors();
+                updateCols = false;
+            }
             if ((mem[modePtr] & 1) == 0) {
                 //colour character set
                 for (int y = 0; y < 32; ++y) {
+                    int offset = (31-y) * 2048;
                     for (int x = 0; x < 16; ++x) {
                         //read four characters and all colours from text buffer
-                        //since each character+colour is 16 bit, this should net us 2 words at a time
+                        //since each character+colour is 16 bit, this should net us 2 characters at a time
                         Int32 AB = mem[pointer + y * 16 + x];
                         UInt16 A = (UInt16)(AB & 0xffff);
                         UInt16 B = (UInt16)((AB >> 16) & 0xffff);
@@ -94,51 +119,44 @@ namespace ProgCom
                         Int32 Bx = mem[charSetPtr + (B & 0xff) * 2];
                         Int32 By = mem[charSetPtr + (B & 0xff) * 2 + 1];
                         //render each character
-                        //problem: each character has only 8 bits/column, each font declares them as 32+32 bits.
-                        //the way around this is complicated
-                        //read 8 bits at a time...
-                        //set 8 pixels with the proper colours
-                        //jump down a row...
-                        //set 8 more colours and so on
-                        fontDraw((A >> 8) & 0xf, (A >> 12) & 0xf, Ax, Ay, 16 * x, 8 * y);
-                        fontDraw((B >> 8) & 0xf, (B >> 12) & 0xf, Bx, By, 16 * x + 8, 8 * y);
+                        UInt64 fontMap = ((UInt64)(UInt32)Ay) << 32 | ((UInt64)(UInt32)Ax);
+                        fontDraw(colors[(A >> 8) & 0xf], colors[(A >> 12) & 0xf], fontMap, offset);
+                        fontMap = ((UInt64)(UInt32)By) << 32 | ((UInt64)(UInt32)Bx);
+                        fontDraw(colors[(B >> 8) & 0xf], colors[(B >> 12) & 0xf], fontMap, offset+8);
+                        offset += 16;
                     }
                 }
             } else {
                 //monochrome display
                 for (int y = 0; y < 256; ++y) {
+                    int offset = ((255 - y) * 256);
                     for (int x = 0; x < 8; ++x) {
                         Int32 pixels = mem[pointer + y * 8 + x];
                         for (int i = 0; i < 32; ++i) {
                             bool set = ((pixels >> i) & 1) != 0;
-                            image.SetPixel(x * 32 + i, 255 - y, set ? colors[1] : colors[0]);
+                            imageBuffer[offset + i] = set ? colors[1] : colors[0];
                         }
+                        offset += 32;
                     }
                 }
             }
-            image.Apply();
+            image.SetPixels32(imageBuffer);
+            image.Apply(false);
         }
 
         //draws a single character to the screen
-        //colA and colB denotes colour, charA and charB is monochrome 8x8 tile, xpos, ypos screen destination upper left
-        private void fontDraw(Int32 colA, Int32 colB, Int32 charA, Int32 charB, int xPos, int yPos)
+        //colA and colB denotes colour, charBits is a monochrome 8x8 tile flattened into bits of an integer, xpos, ypos are screen destination upper left
+        private void fontDraw(Color32 colA, Color32 colB, UInt64 charBits, int pointer)
         {
-            //for the first half of the character
-            for (int i = 0; i < 4; ++i) {
-                Int32 currentBits = ((charA >> (i * 8)) & 0xff);
+            pointer += 256 * 7;
+            //move the color data into the texture buffer
+            for (int i = 0; i < 64; i+=8) {
+                int currentBits = (int)(charBits >> i) & 0xff;
                 for (int j = 0; j < 8; ++j) {
                     bool bit = ((currentBits << j) & 0x80) != 0;
-                    image.SetPixel(xPos + j, 255 - (yPos + i), bit ? colors[colA] : colors[colB]);
+                    imageBuffer[pointer + j] = bit ? colA : colB;
                 }
-            }
-
-            //second half
-            for (int i = 0; i < 4; ++i) {
-                Int32 currentBits = ((charB >> (i * 8)) & 0xff);
-                for (int j = 0; j < 8; ++j) {
-                    bool bit = ((currentBits << j) & 0x80) != 0;
-                    image.SetPixel(xPos + j, 255 - (yPos + i + 4), bit ? colors[colA] : colors[colB]);
-                }
+                pointer -= 256;
             }
         }
 
@@ -483,7 +501,14 @@ namespace ProgCom
 
         public void memWrite(ushort position, int value)
         {
-            mem[position - address] = value;
+            updateScreen = true;
+            position -= address;
+
+            if (position > modePtr && position < charSetPtr) {
+                updateCols = true;
+            }
+
+            mem[position] = value;
         }
 
         public void tick(int ticks)

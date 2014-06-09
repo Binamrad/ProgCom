@@ -73,6 +73,7 @@ namespace ProgCom
         public override void OnStart(PartModule.StartState state)
         {
             base.OnStart(state);
+            if(state.Equals(PartModule.StartState.Editor)) return;//don't start stuff in the editor
             vessel.OnFlyByWire += performManouvers;
         }
 

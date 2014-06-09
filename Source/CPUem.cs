@@ -13,7 +13,8 @@ namespace ProgCom
         {
             public const int IENABLED = 0;
             public const int IQUEUEHANDLE = 1;
-            
+            public int currentInterruptHandled = -1;
+
             private const ushort address = 44;
             private ushort _IADDRESS;
             private int _ISTATS;
@@ -26,8 +27,11 @@ namespace ProgCom
 
             public void setStatus(int statusID, bool b)
             {
-                if(b) _ISTATS |= (1 << statusID);
-                else _ISTATS ^= _ISTATS & (1 << statusID);
+                if (b) {
+                    _ISTATS |= (1 << statusID);
+                } else {
+                    _ISTATS ^= _ISTATS & (1 << statusID);
+                }
             }
 
             public ushort getIAddr()
@@ -155,7 +159,10 @@ namespace ProgCom
         }
         public void spawnException(int i)
         {
-            if (interruptsPending.Count < 256 && !interruptsPending.Contains(i) /*&& !(!interruptStatus.getStatus(IntStatus.IQUEUEHANDLE) && register[30] == i)*/ && interruptStatus.getStatus(IntStatus.IENABLED)) {
+            if (interruptsPending.Count < 256
+                    && !interruptsPending.Contains(i)
+                    && !(!interruptStatus.getStatus(IntStatus.IQUEUEHANDLE) && interruptStatus.currentInterruptHandled == i)
+                    && interruptStatus.getStatus(IntStatus.IENABLED)) {
                 interruptsPending.Enqueue(i);
             }
         }
@@ -171,12 +178,25 @@ namespace ProgCom
             catch (Exception e) {
                 errorMessages.AddLast("Error in instruction stuff: " + e.Message);
                 hasErrors = true;
+                return 100;
             }
-            if (cyclesElapsed > 0) {
+            try {
                 //update timers and such, spawn interrupts
                 handleHardware(cyclesElapsed);
+            }
+            catch (Exception e) {
+                errorMessages.AddLast("Error in hardware stuff: " + e.Message);
+                hasErrors = true;
+                return 101;
+            }
+            try {
                 //handle all interrupts
                 interruptHandle();
+            }
+            catch (Exception e) {
+                errorMessages.AddLast("Error in interrupt stuff: " + e.Message);
+                hasErrors = true;
+                return 102;
             }
             return cyclesElapsed;
         }
@@ -186,7 +206,6 @@ namespace ProgCom
 
         private int nextInst()
         {
-            //TODO: add proper timings to all instructions
             //bit of background stuff
             //r0 is always locked to 0
             register[0] = 0;
@@ -224,30 +243,30 @@ namespace ProgCom
                 switch (inst) {
                     case 0://Add
                         exTmp = ((UInt64)valB & 0xffffffff) + ((UInt64)valC & 0xffffffff);//apparently, C# does the sign-extendy thing even when casting to ulong
-                        register[regA] = (Int32)exTmp;
                         register[exreg] = (Int32)(exTmp >> 32);
+                        register[regA] = (Int32)exTmp;
                         break;
                     case 1://Sub
                         exTmp = ((UInt64)valB & 0xffffffff) + ((UInt64)(-valC) & 0xffffffff);
-                        register[regA] = (Int32)exTmp;
                         register[exreg] = (Int32)(exTmp >> 32);
+                        register[regA] = (Int32)exTmp;
                         break;
                     case 2://Mul
                         exTmp = ((UInt64)valB & 0xffffffff) * ((UInt64)valC & 0xffffffff);
-                        register[regA] = (Int32)exTmp;
                         register[exreg] = (Int32)(exTmp >> 32);
+                        register[regA] = (Int32)exTmp;
                         executionTime += 9;
                         break;
                     case 3://Div
                         if (valC == 0) {
                             //illegalInstructionInterrupt
-                            interruptsPending.Enqueue(258);//change do dividebyzerointerrupt
+                            interruptsPending.Enqueue(258);//change to dividebyzerointerrupt when available
                             register[regA] = -1;
                             register[exreg] = -1;
                             break;
                         }
+                        register[exreg] = valB - (valB / valC) * valC;//this is equal to valB % valC on most systems.
                         register[regA] = valB / valC;
-                        register[exreg] = valB - register[regA] * valC;//this is equal to valB % valC on most systems.
                         executionTime += 39;
                         break;
                     case 4://And
@@ -277,28 +296,28 @@ namespace ProgCom
                         }
                         break;
                     case 1://Sr
-                        register[regA] = (Int32)((UInt32)valB >> (valC & 0x1f));//logical right shift
                         if (valC != 0) {
                             register[exreg] = valB << 32 - (valC & 0x1f);
                         } else {
                             register[exreg] = 0;
                         }
+                        register[regA] = (Int32)((UInt32)valB >> (valC & 0x1f));//logical right shift
                         break;
                     case 2://Sl
-                        register[regA] = valB << (valC & 0x3f);
                         if (valC != 0) {
                             register[exreg] = (Int32)((UInt32)valB >> (32 - valC & 0x3f));
                         } else {
                             register[exreg] = 0;
                         }
+                        register[regA] = valB << (valC & 0x3f);
                         break;
                     case 3://Sra
-                        register[regA] = valB >> (valC & 0x1f);//arithmetic right shift
                         if (valC != 0) {
                             register[exreg] = valB << 32 - (valC & 0x1f);
                         } else {
                             register[exreg] = 0;
                         }
+                        register[regA] = valB >> (valC & 0x1f);//arithmetic right shift
                         break;
                     case 4://Sx
                         spawnException(258);
@@ -613,10 +632,11 @@ namespace ProgCom
             if (interruptStatus.getStatus(IntStatus.IQUEUEHANDLE)) {
                 //if an interrupt is pending
                 //disable interrupts and jump to interrupt handler adress
-                if (interruptsPending.Count != 0) {
+                if (interruptsPending.Count > 0) {
                     register[31] = pc;
                     register[30] = interruptsPending.Dequeue();
                     interruptStatus.setStatus(IntStatus.IQUEUEHANDLE, false);
+                    interruptStatus.currentInterruptHandled = register[30];
                     pc = interruptStatus.getIAddr();
                 }
             }
@@ -641,7 +661,7 @@ namespace ProgCom
                 }
                 catch (Exception e) {
                     errorMessages.AddLast(e.Message + " in " + hw.GetType());
-                    hasErrors = false;
+                    hasErrors = true;
                     try {
                         hw.disconnect();
                     } catch { };//we don't need to care about fuckups here, probably
@@ -649,22 +669,35 @@ namespace ProgCom
                     //move the above into a separate function
                 }
             }
+
         }
 
         public void hwConnect(IPCHardware hw)
         {
-            hw.connect();
-            memory.hwConnect(hw);
-            hw.recInterruptHandle(new InterruptHandle(this));
-            hardware.AddLast(hw);
-        }
-
-        public Int32[] Memory
-        {
-            get
-            {
-                return memory.Memory;
+            try {
+                hw.connect();
+                memory.hwConnect(hw);
+                hw.recInterruptHandle(new InterruptHandle(this));
+                hardware.AddLast(hw);
+            }
+            catch (Exception e) {
+                hasErrors = true;
+                errorMessages.AddLast(e.Message);
+                //memory.hwDisconnect(hw);//implement, pronto
+                hardware.Remove(hw);
+                try {
+                    hw.disconnect();
+                }
+                catch { }
             }
         }
+
+        //public Int32[] Memory
+        //{
+        //    get
+        //    {
+        //        return memory.Memory;
+        //    }
+        //}
     }
 }

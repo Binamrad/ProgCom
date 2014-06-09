@@ -1,10 +1,16 @@
-using the compiler:
+Using the compiler:
 
-from the console run the jar file with the arguments java -jar pcc.jar
+run the jar file from the console with the command java -jar pcc.jar
+when the program starts specify a list of files you want to compiler separated by spaces. They will be compiled into one .asm file
 it should also be possible to specify a list of filenames when running the program, like so: java -jar pcc.jar filename1.pcc ... filenameN.pcc
 
 
-defining functions:
+Defining functions:
+
+function declaration is done by first writing def, then the name of the function.
+	If the function takes parameters you then specify the type of the parameters and the names of the parameters.
+	If the function takes parameters of several types you then specify the next type and the names of the variables that have that type etc.
+after that you place a colon and then a list of the return types of the function. A function can return several variables.
 
 def <functionName> [type1 varname1 [varname2..varnameN] [type2..typeN]] : [returnType1..returnTypeN] {
 ...
@@ -25,13 +31,13 @@ def bar int a b c float d e f : int int float float char char {
 }
 
 
-arithmetic operations:
-the language is stack based. in order to do an operation the variables are listed first, and then the operation.
-the operations are performed in the order they are listed in.
-The way to think about this is: the variables are pushed to a stack and then operations are performed on the stack
+Arithmetic operations:
+The language is stack based, using reverse polish notation. In order to do an operation the variables are listed first, and then the operation.
+The operations are performed in the order they are listed in.
+
 example statement:
 int a b c;//declare variables a, b and c
-a b c + =;//push a, b and c to stack. pop b and c from stack and add them. pop b+c and a from the stack, assign the value of b+c to a and push a to stack;
+a b c + =;//push a, b and c to stack. pop b and c from stack and add them. pop b+c and a from the stack, assign the value of b+c to a and push a to stack; (equivalent c code: a=b+c;)
 
 //step by step:
 
@@ -74,46 +80,45 @@ a b c + =;//push a, b and c to stack. pop b and c from stack and add them. pop b
 	a (a=b+c)
 	---
 
-5:	statement:
+6:	statement:
 	... ;
 	
 	stack:
 	---
 
-
 available operators:
 
-in the result section, parm1 refers to the variable specified first, and param2 refers to the second
+in the result section, param1 refers to the variable at the top of the stack and param2 to the one below it.
 in this example:
 a 3 +;
 a is param1 and 3 is param2
-all operators that are part of an operation are taken off the stack and are not present afterwards, unless otherwise specified
-the ammount of operators involved in an operation are specified in 'parameters'
+all operands that are part of an operation are taken off the stack and are not present afterwards, unless otherwise specified
+the ammount of operands involved in an operation are specified in 'parameters'
 
 operator:	meaning:					parameters:		result:
 
-+		addition					2			param1+param2 pushed to stack
--		subtraction					2			param1-param2 pushed to stack	
-*		multiplication					2			param1*param2 pushed to stack
-/		division					2			param1/param2 pushed to stack
-%		modulus						2			param1%param2 pushed to stack
-+=		compount assignment addition			2			param1+param2 pushed to stack, param1 is assigned value of param1+param2
--=		compound assignment subtraction			2			param1-param2 pushed to stack, param1 is assigned value of param1-param2
-*=		compound assignment multiplication		2			param1*param2 pushed to stack, param1 is assigned value of param1*param2
-/=		compound assignment division			2			param1/param2 pushed to stack, param1 is assigned value of param1/param2
-&=		compound assignment bitwise and			2			param1&param2 pushed to stack, param1 is assigned value of param1&param2
-^=		compound assignment bitwise xor			2			param1^param2 pushed to stack, param1 is assigned value of param1^param2
-|=		compound assignment bitwise or			2			param1|param2 pushed to stack, param1 is assigned value of param1|param2
-=		assignment					2			param1 is assigned value of param2
-&		bitwise and					2			param1&param2 pushed to stack
-|		bitwise or					2			param1|param2 pushed to stack
-^		bitwise	xor					2			param1^param2 pushed to stack
-&&		logical and (Note: very buggy at the moment)	2			param1&&param2 pushed to stack
-||		logical or  (Note: very buggy at the moment)	2			param1||param2 pushed to stack
-^^		logical xor (Note: very buggy at the moment)	2			param1^^param2 pushed to stack
-#		pointer read					1			the value pointer to by param1 is pushed to stack
-<-		pointer write					2			param2 is written to the address pointed to by param1, param1 remains on stack
-$		function call					>= 1			parameters are removed from stack, return values are set to the return values from the function
++		addition					2			param2+param1 pushed to stack
+-		subtraction					2			param2-param1 pushed to stack	
+*		multiplication					2			param2*param1 pushed to stack
+/		division					2			param2/param1 pushed to stack
+%		modulus						2			param2%param1 pushed to stack
++=		compount assignment addition			2			param2+param1 pushed to stack, param2 is assigned value of param2+param1
+-=		compound assignment subtraction			2			param2-param1 pushed to stack, param2 is assigned value of param2-param1
+*=		compound assignment multiplication		2			param2*param1 pushed to stack, param2 is assigned value of param2*param1
+/=		compound assignment division			2			param2/param1 pushed to stack, param2 is assigned value of param2/param1
+&=		compound assignment bitwise and			2			param2&param1 pushed to stack, param2 is assigned value of param2&param1
+^=		compound assignment bitwise xor			2			param2^param1 pushed to stack, param2 is assigned value of param2^param1
+|=		compound assignment bitwise or			2			param2|param1 pushed to stack, param2 is assigned value of param2|param1
+=		assignment					2			param2 is assigned value of param1
+&		bitwise and					2			param2&param1 pushed to stack
+|		bitwise or					2			param2|param1 pushed to stack
+^		bitwise	xor					2			param2^param1 pushed to stack
+&&		logical and					2			param2&&param1 pushed to stack
+||		logical or					2			param2||param1 pushed to stack
+^^		logical xor					2			param2^^param1 pushed to stack
+#		pointer read					1			the value pointed to by param1 is pushed to stack
+<-		pointer write					2			param1 is written to the address pointed to by param2, param1 remains on stack
+$		function call					1+			parameters are removed from stack. If the function returns more than one value the remaining variables are set to the return values from the function, otherwise the return value from the function is pushed to the stack.
 (-)		negation					1			the value -param1 is pushed to the stack
 (<type>)	type cast					1			the value of param1 is converted to specified type and pushed to stack
 ++		preincrement					1			param1 is assigned the value of param1+1 and remains on stack
@@ -121,28 +126,71 @@ $		function call					>= 1			parameters are removed from stack, return values are
 +++		postincrement					1			the value of param1 is copied to the stack, param1 is assigned the value of param1+1
 ---		postdecrement					1			the value of param1 is copied to the stack, param1 is assigned the value of param1-1
 @		address of					1			the address of the variable param1 is pushed to stack
->		greater than					2			if param1 > param2, 1 is pushed to stack, otherwise 0
-<		less than					2			if param1 < param2, 1 is pushed to stack, otherwise 0
->=		greater than or equal				2			if param1 >= param2, 1 is pushed to stack, otherwise 0
-<=		less than or equal				2			if param1 <= param2, 1 is pushed to stack, otherwise 0
-!=		not equal					2			if param1 != param2, 1 is pushed to stack, otherwise 0
-==		equal						2			if param1 == param2, 1 is pushed to stack, otherwise 0
-!		logical	not					1			if param1 == 0, 1 is pushed to stack, otherwise 0
+>		greater than					2			if param2 > param1, 1 is pushed to stack, otherwise 0
+<		less than					2			if param2 < param1, 1 is pushed to stack, otherwise 0
+>=		greater than or equal				2			if param2 >= param1, 1 is pushed to stack, otherwise 0
+<=		less than or equal				2			if param2 <= param1, 1 is pushed to stack, otherwise 0
+!=		not equal					2			if param2 != param1, 1 is pushed to stack, otherwise 0
+==		equal						2			if param2 == param1, 1 is pushed to stack, otherwise 0
+!		logical	not					1			if param2 == 0, 1 is pushed to stack, otherwise 0
 
 
-if-statements:
+Variable declaration:
+
+Local variables:
+to declare a variable in a function type the name of the type and then the names of the variables of that type. you cannot initialise the value of a variable on the same line it is declared.
+<type> <varname1> [<varname2> ... <varnameN>];
+example: 
+int a b c;
+
+Global variables:
+global variables can only be declared outside functions. all functions can access these varaibles.
+var <type> <varname> [= <value>];
+example:
+var int a = 10;
+var int b;
+note:
+	strings and pointers cannot be assigned to global variables during declaration yet.
+
+Types:
+The compiler currently supports the following types:
+int
+char
+float
+func1, func2...funcN
+
+the func1 etc. types denotes function pointers. No type checking is performed when calling function pointers, so it is up to the programmer to make sure it is correct at the moment.
+the number after "func" denotes the number of parameters the function takes. There is no checking for the ammount of return values, and the ammount of return values will be interpreted as the number of variables on the stack minus the ammount of parameters to the function.
+
+the compiler also allows pointers to these types, specified by putting a # in front of the type:
+int#
+char#
+float#
+
+you can also have pointers to pointers or even more nested levels of pointers
+int##
+char###
+func3#	//pointer to function pointer
+float#######
+
+
+If-statements:
 
 if <statement> <statement>
 
-if the first statement evaluates as true the second statement will be executed
+if the first statement evaluates as true (non-zero) the second statement will be executed
 
-example:
+example:			c equivalent:
+
+if foo bar !=;			if(foo != bar) foo += bar;
+	foo += bar;
 
 if foo bar <; {
-...
+	...
 }
 
-loops:
+
+Loops:
 
 while <statement> <statement>
 
@@ -158,34 +206,39 @@ break; will exit the loop
 continue; will continue the loop from the top if the loop condition is true
 
 
-calling functions:
+Calling functions:
 
-[returnValues] [parameters] functionName$ [=];
+in order to call a function you first specify the variables that are going to be assigned to, then the parameters to the function, then the function name and last of all the '$' operator.
+if you want to assign the function return values to variables you need to follow the '$' operator by the '=' operator.
+if the function returns more than one value you are forced to assign the values to variables
+
+[returnValues] [parameters] <functionName>$ [=];
 
 if the function has several return values it is illegal to not have the assignment operator after the function call operator.
 
-example:
+example:				equivalent c-like code
 
-def add2 int a b : int {
-	return a b +;
+def add2 int a b : int {		//int add2(int a, int b)
+	return a b +; 			//return a + b;
 }
 ...
-	a 1 2 add2$=;//a = 1 + 2
+	a 1 2 add2$=;			//a = add2(1, 2);
+	b a 2 * 3 add2$=;		//b = add2(a*2, 3);
 
-def return3 int a : int int int {
-	return a 1 + a 2 + a 3 +;
+def return3 int a : int int int {	
+	return a 1 + a 2 + a 3 +;	//return a+1, a+2, a+3;
 }
 ...
-	a b c a return3$=;//a = a+1, b = a+2, c = a+3
+	a b c a return3$=;		//a = a+1, b = a+2, c = a+3
 
-def foo : {
-	return;
+def foo : {				//void foo()
+	return;				//return;
 }
 ...
-	foo$;
+	foo$;				//foo();
 
 
-inline assembler:
+Inline assembler:
 asm	[variables];
 	"inline assembly code"
 	"more inline assembler"
@@ -195,34 +248,47 @@ asm	[variables];
 	[variables];
 
 after the keyword "asm" a list of variables that are to be used in the inline assembler are specified. They are then arranged in register r1-rN, where N is the ammount of variables specified.
-after the list of variables a series of strings containing assembler code are placed. Each string will be placed on a separate line.
+after the list of variables a series of strings containing assembler code are placed. Each string will be placed on a separate line in the generated .asm file.
 after the assembler code the return values are specified. The values are taken from register r1-rN, where N is the ammount of variables that are returnd from the assembler code.
 
 before the inline assembler, all variables are stored, so any change to any register (except ra/fp/sp/a4+) will not result in a loss of data.
 
 example:
 int a b c;
-asm a b;
-"sub	r1, r1, r2"
-"addi	r1, r1, 1";
-c;//result: c is given the value a - b + 1
+asm a b;		//set a in r1 and b in r2
+"sub	r1, r1, r2"	//subtract r2 from r1
+"addi	r1, r1, 1";	//add 1 to r1
+c;			//set location of variable c to register r1
+//result: c is given the value a - b + 1
 
 
-type casting:
+Type casting:
 
+write the type you want to convert to inside of parentheses. The variable at the top of the stack 
 	int a;
 	float b;
 	b a (float) =;
 
 
+Including files
 
+on a commented-out line write #include <filename>
 
+examples:
+//#include filename1.pcc
+// #include filename2.pcc
 
-***************************************************************
-*******************    Program Syntax Sample    ***************
-******************* And Equivalent C Statements ***************
-***************************************************************
+if anything besides #include and the filename need to be written on the line, you have to add a second comment-out section:
 
+example:
+//#include filename1.pcc // this is a comment
+//#include filename2.pcc this is not a comment and will cause an error
+
+******************************************************************************************
+******************************    Program Syntax Sample    *******************************
+****************************** And Equivalent C Statements *******************************
+******************************************************************************************
+(note that this is only an example of valid syntax, the code doesn't actually do anything)
 
 def main : int {	//int main(void)
   int x y z;		//int x, y, z;
@@ -241,7 +307,9 @@ def main : int {	//int main(void)
 
   if x y <; {		//if(x < y) {
     while x y <; x++;	//while(x < y) ++x;
-  }
+  } else {		//} else {
+    x y =;		//x = y;
+  }			//}
 
   float f;		//float f;
   f z (float) =;	//f = (float)z;

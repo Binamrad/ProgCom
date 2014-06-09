@@ -1,0 +1,10 @@
+If you want to use the example code in your own projects, this is the calling convention for the contained functions:
+
+Calling functions:
+When you call a subroutine, all registers in the range r1->r12 and a0->a3 may be changed by the subroutine
+if you need a value contained in one of those registers for later, it needs to be pushed to the stack or moved to a non-altered register.
+fp, sp and a4->a12 are unchanged
+
+all arguments to the subroutine passed in r1. if there is more than one parameter, successively higher registers are used. (r2, r3 etc.)
+the result from the subroutine is returned in r1. if there is more than one returned value, successively higher registers are used to store the additional values. (r2, r3 etc.)
+

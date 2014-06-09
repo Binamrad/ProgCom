@@ -16,7 +16,7 @@ namespace ProgCom
         const int insCacheSize = 256;//ditto
         const int rowSize = 8;//must be a power of two
         const int blocks = 2;//must be a number of two
-        const int firstWordDelay = 2;//number of cycles until the first word appears on cache load
+        const int firstWordDelay = 3;//number of cycles until the first word appears on cache load
         const int wordFetchRate = 2;//number of cycles for each subsequent word on cache load
 
         //check if address addr in in the cache

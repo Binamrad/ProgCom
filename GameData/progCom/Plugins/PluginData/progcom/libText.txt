@@ -5,7 +5,7 @@
 #include libLabel.txt
 #include libASCII.txt
 
-#global setFontBackground
+#global setBgCol
 setBgCol:
 	andi	r1, r1, 15;sanity check
 	wr	r1, r0, colBackground

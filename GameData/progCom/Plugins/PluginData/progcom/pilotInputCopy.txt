@@ -1,6 +1,8 @@
 ;this code copies the pilots entered values into the control registers
 ;thus, if everything works, the ship should act like the computer isn't there
 .text
+#include libLabel.txt
+
 #global main
 main:
 	rd	r1, r0, GLOBAL_PILOT_THROTTLE

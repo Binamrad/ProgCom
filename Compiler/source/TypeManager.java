@@ -45,7 +45,7 @@ public class TypeManager {
 	private boolean pointercorrect(String t1, String t2, String acc) {
 		return (isPointer(t1) && t2.equals(acc)) || (isPointer(t2) && t1.equals(acc));
 	}
-	private boolean isPointer(String t) {
+	public boolean isPointer(String t) {
 		return t.endsWith("#");
 	}
 	
@@ -55,7 +55,7 @@ public class TypeManager {
 		//pointer and int
 		//int and char
 		
-		return (t1.equals("any") || t2.equals("any") || t1.equals(t2)) || accept2(t1, t2, "string", "char") || pointercorrect(t1, t2, "int") || pointercorrect(t1, t2, "char");
+		return (t1.equals("any") || t2.equals("any") || t1.equals(t2)) || accept2(t1, t2, "int", "char") || pointercorrect(t1, t2, "int") || pointercorrect(t1, t2, "char");
 	}
 	
 	public String getTypeResult(String type1, String type2) {
@@ -73,7 +73,7 @@ public class TypeManager {
 		if(isPointer(type2) && type1.equals("char")) return type2;
 		
 		//if one is char and one is int return int
-		if( (type1.equals("char") && type1.equals("int")) || (type2.equals("char") && type1.equals("int"))) return "int";
+		if( (type1.equals("char") && type2.equals("int")) || (type2.equals("char") && type1.equals("int"))) return "int";
 		
 		//if one type is any and one type is something else, return something else
 		if(type1.equals("any")) return type2;

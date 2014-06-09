@@ -50,24 +50,26 @@ this label points to the first address for storing screen data
 
 GLOBAL_SCREEN_COLOR:
 
-this label points to a vector containing 16 colors in XXXXRRRRGGGGBBBB format
+this label points to a vector containing 16 colors in XRGB format, 8 bits per component.
 the default colors stored at this location are these:
-0:  0x00000000
-1:  0x00ffffff
-2:  0x0068372b
-3:  0x0070a4b2
-4:  0x006f3d86
-5:  0x00588d43
-6:  0x00352879
-7:  0x00b8c76f
-8:  0x006f4f25
-9:  0x00433900
-10: 0x009a6759
-11: 0x00444444
-12: 0x006c6c6c
-13: 0x009ad284
-14: 0x006c5eb5
-15: 0x00959595
+
+ID  Value	Color
+0:  0x00000000	black
+1:  0x00ffffff	white
+2:  0x0068372b	red
+3:  0x0070a4b2	cyan
+4:  0x006f3d86	violet
+5:  0x00588d43	green
+6:  0x00352879	blue
+7:  0x00b8c76f	yellow
+8:  0x006f4f25	orange
+9:  0x00433900	brown
+10: 0x009a6759	light red
+11: 0x00444444	grey 1
+12: 0x006c6c6c	grey 2
+13: 0x009ad284	light green
+14: 0x006c5eb5	light blue
+15: 0x00959595	grey 3
 
 GLOBAL_SCREEN_FONT:
 

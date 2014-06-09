@@ -6,4 +6,8 @@ public class Tuple<A, B>{
 		x = X;
 		y = Y;
 	}
+	public String toString() {
+		return "["+x.toString()+":"+y.toString()+"]";
+		
+	}
 }

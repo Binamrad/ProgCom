@@ -45,28 +45,63 @@
 
 ;8 bit instructions
 
+;8 bit addition
 #macro add8 rA rB rC {
 	add	rA, rB, rC
 	andi	rA, rA, 255
 }
 
+;8 bit subtraction
 #macro sub8 rA rB rC {
 	sub	rA, rB, rC
 	andi	rA, rA, 255
 }
 
-#macro tobyteptr rA rB {
-	sri	rA, rB, 2
+;8 bit multiplication
+#macro mul8 rA rB rC {
+	mul	rA, rB, rC
+	andi	rA, rA, 255
 }
 
+;8 bit division
+#macro div8 rA rB rC {
+	andi	ex, rC, 255
+	;sign extend
+	sli	ex, ex, 24
+	srai	ex, ex, 24
+	andi	rA, rB, 255
+	div	rA, rA, ex
+}
+
+;basically a multiply by 4
+#macro tobyteptr rA rB {
+	sli	rA, rB, 2
+}
+
+;read byte from memory
 #macro rd8 rA rB ADDR {
 	;read from memory
+	addi	rA, rB, ADDR
+	sri	rA, rA, 2
+	rd	rA, rA, 0
 	;mask out byte we want
+	sri	ex, ex, 27
+	shr	rA, rA, ex
+	andi	rA, rA, 255
 }
 
+;write byte to memory
+;this macro uses the frame pointer as temporary variable storage. It is properly restored, but do not use this macro to assign anything to fp
 #macro wr8 rA rB ADDR {;this instruction is really hard
+	push	fp
 	;read from memory location
-	;mask out byte we want to replace
-	;shift in the data we want to put there
+	addi	fp, rB, ADDR
+	sri	ex, fp, 2
+	rd	ex, ex, 0
+	;replace the byte we want to replace
+	movbl	ex, rA, fp
 	;write back to proper position
+	sri	fp, fp, 2
+	wr	ex, fp, 0
+	pop	fp
 }

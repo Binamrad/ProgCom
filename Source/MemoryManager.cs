@@ -40,8 +40,11 @@ namespace ProgCom
             for (int i = 0; i < segCount; ++i) {
                 Tuple<UInt16, int> segment = hw.getSegment(i);
                 for (int j = 0; j < segment.Item2; ++j) {
-                    if (deviceMap[j + segment.Item1] != null) throw new ArgumentException("Intersecting segments are not allowed");
-                    deviceMap[j + segment.Item1] = hw;
+                    if (deviceMap[j + segment.Item1] != null) {
+                        throw new ArgumentException("Intersecting segments are not allowed");
+                    } else {
+                        deviceMap[j + segment.Item1] = hw;
+                    }
                 }
             }
             //devices.AddLast(hw);
@@ -60,20 +63,22 @@ namespace ProgCom
 
 
         UInt16 lastChecked;
-        int lastRange;
         int lastDevCount;
 
         //returns the ammount of hardware devices in the specified range
         public int devicesInRange(UInt16 address, int range)
         {
-            if (address == lastChecked && range == lastRange) return lastDevCount;
+            if (address == lastChecked) return lastDevCount;
             lastChecked = address;
-            lastRange = range;
             int devCount = 0;
             for (int i = address; i < range+address; ++i) {
                 if (deviceMap[i] != null) {
                     ++devCount;
-                    while (deviceMap[i] == deviceMap[i+1] && i < range+address) ++i;
+                    int j;
+                    for (j = i+1; j < range+address; ++j) {
+                        if (deviceMap[j] != deviceMap[i]) break;
+                    }
+                    i = j-1;
                 }
             }
             lastDevCount = devCount;

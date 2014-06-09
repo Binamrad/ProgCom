@@ -40,8 +40,10 @@ def itoa char# outStr int x : {
 		i++;
 		outStr++;
 	}
+	//zero-terminate the string
 	outStr 0 <-;
 	outStr--;
+	//reverse the string, except for terminating zero
 	i--;
 	while i 0 >; {
 		char tmpchar;

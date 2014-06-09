@@ -170,8 +170,8 @@ namespace ProgCom
             mem[31] = (Int32)(UInt32)(altitude);
 
             //give the update interrupt to the processor
-            if(accs[1] != 0)
-                inth.interrupt(257);
+            //if(accs[1] != 0)
+            inth.interrupt(257);
         }
     }
 }

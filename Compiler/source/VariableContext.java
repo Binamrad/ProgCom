@@ -43,6 +43,10 @@ public class VariableContext {
 					//find the position x that i is to be stored at, and store that, move i to x
 					for(String s : varNames) {
 						if(s.equals(registers[i])) {
+							if(x==varPos) {//if this is the case we are about to overwrite a variable, we don't want that
+								store(i);
+								break;
+							}
 							store(x);
 							registers[x] = registers[i];
 							registers[i] = null;
@@ -63,10 +67,12 @@ public class VariableContext {
 				continue;
 			} else if(varPos != -1 && varPos != -10) {
 				if(dataMove) {
-					store(varPos);
+					if(!variable.startsWith("__TMP")) {
+						store(varPos);
+					}
 					registers[varPos] = null;
 					unAlter(varPos);
-					asm.add("mov", regName(i), regName(varPos));
+					asm.add("mov", regName(i), regName(varPos));//should we update the names of the variables in the various registers here? 
 				}
 			} else if(varPos == -10) {
 				asm.add("mov", regName(i), "r0");
@@ -78,7 +84,8 @@ public class VariableContext {
 					asm.add("rd", regName(i), "r0", globalVars.get(variable));
 				}
 			}
-			//TODO: make sure to update the list of recently used variables here
+			//TODO: make sure to update the list of recently used variables here (non-essential)
+			//updateUses(i);//is this correct?
 			registers[i] = variable;
 			if(dataMove) {
 				unAlter(i);
@@ -371,6 +378,7 @@ public class VariableContext {
 			if(regRestore[i] == null) {
 				registers[i] = null;
 				registerAge[i] = 10;//anything other than 0 will do here
+				unAlter(i);
 				continue;
 			} else if (!regRestore[i].equals(registers[i])){
 				//load variable from stack or from the global variables
@@ -382,6 +390,7 @@ public class VariableContext {
 				registerAge[i] = 0;
 			}
 			registers[i] = regRestore[i];
+			if(altRestore[i]) alter(i);
 		}
 	}
 	//sets the state to an earlier(?) state. This method will not ensure the integrity of data

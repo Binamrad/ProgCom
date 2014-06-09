@@ -1,0 +1,93 @@
+.text
+#include libLabel.txt
+
+;IN: target goal in r1
+;OUT: nothing
+#global tape_seek
+tape_seek:
+	push	ra
+	sli	r1, r1, 8
+	ori	r1, r1, 2
+	call	sendToTape
+	pop	ra
+	jmpr	ra
+
+
+;IN: ammount of words to read in r1, output area pointer in r2
+;OUT: nothing
+#global tape_read
+tape_read:
+	push	ra
+	mov	r4, r1
+	mov	r5, r2
+read_loop:
+	ble	r4, r0, read_end
+	call	tape_read_word
+	wr	r1, r5, 0
+	addi	r5, r5, 1
+	subi	r4, r4, 1
+	br	read_loop
+read_end:
+	pop	ra
+	jmpr	ra
+
+;IN: nothing
+;OUT: value read from tape in r1
+#global tape_read_word
+tape_read_word:
+	push	ra
+	call	wait_for_nbusy
+	movi	r1, 0x101	
+	call	sendToTape
+readw_wait_loop:
+	rd	r1, r1, GLOBAL_TAPE_STATUS
+	andi	r1, r1, 1
+	beq	r1, r0, readw_wait_loop
+	rd	r1, r0, GLOBAL_TAPE_IN	
+
+	pop	ra
+	jmpr	ra
+
+IN: word to write in r1
+OUT: nothing
+#global tape_write_word
+tape_write_word:
+	push	ra
+	call	wait_for_nbusy
+	push	r1
+	movi	r1, 0x103
+	call	sendToTape
+	pop	r1
+	call	sendToTape
+
+	pop	ra
+	jmpr	ra;
+
+;IN: ammount of words to write in r1, area to write in r2
+#global tape_write
+tape_write:
+	push	ra
+	mov	r4, r1
+	mov	r5, r1
+write_loop:	
+	ble	r4, r0, write_end
+	rd	r1, r5, 0
+	call	tape_write_word
+	addi	r5, r5, 1
+	subi	r4, r4, 1
+	br	write_loop
+write_end:
+	pop	ra
+	jmpr	ra
+
+;sends r1 to the tape drive
+sendToTape:
+	wr	r1, r0, GLOBAL_TAPE_OUT
+	jmpr	ra;
+
+;idles until the tape drive is not busy
+wait_for_nbusy:
+	rd	r1, r0, GLOBAL_TAPE_STATUS
+	andi	r1, r1, 8
+	beq	r1, r0, wait_for_nbusy
+	jmpr	ra

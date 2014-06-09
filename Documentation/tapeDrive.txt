@@ -9,36 +9,39 @@ size:			1024*256 words of data
 
 Tape layout:
 
-0:			unused
+0:			Unused
 1:			if not 4711, the tape drive will assume the tape is invalid and refuse to read/write to it
 2:			if not zero the tape will be in a read-only state. The tape will have to be ejected and reinserted before the tape drive recognises that this flag has changed.
-3:			the default bootloader uses this address as a pointer to the program to load from the tape
+3:			the default bootloader uses this address as a pointer to the program to load from the tape. (note: the bootloader assumes the two first words where this is pointing to be the address to load the program at and the length of the program, respectively)
 4-7:			reserved			
 8+:			free space
 
 
 Associated memory addresses
-address:	label:				Verbose:
+Address:	Label:				Verbose:
 
 64		GLOBAL_TAPE_OUT			contents of this register are sent to the tape drive, the output buffer
 65		GLOBAL_TAPE_IN			this register contains data sent from the tape drive, the input buffer
-66		GLOBAL_TAPE_STATUS		This <<< contains the tape drive status
+66		GLOBAL_TAPE_STATUS		This register contains the tape drive status. Only the IE, IOB and IIB bits are writable to
 67		GLOBAL_TAPE_INTERRUPT		Error values. When written to, the 'writing' status is cancelled. as long as this register is non-zero, interrupts will be made while enabled.
 
 Status Register:
-bit:		meaning:
-0		input buffer is full
-1		output buffer is empty
-2		interrupt enable bit
-3		tape drive busy
-4		write buffer full
-5		read buffer full
-6		writing data to tape
-7		interrupt on obe toggle
+Bit:		Meaning:			Shorthand:		Notes:
+0		input buffer is full		IBF
+1		output buffer is empty		OBE
+2		interrupt enable bit		IE
+3		tape drive busy			BUSY			set to true when the tape drive is reading from the tape, when the tape drive is winding to some position or the tape drive is writing to the tape and all words that are to be written has been received
+4		write buffer full		WBF
+5		read buffer full		RBF
+6		writing data to tape		WRITING
+7		interrupt on obe toggle		IOB
+8		reading data from tape		READING
+9		winding the tape		SEEKING
+10		interrupt on ibf toggle		IIB
 
 
 Interrupt Register:
-value		meaning
+Value:		Meaning:
 0		nothing
 1		unrecognised command sent to drive
 2		end of tape reached during operation
@@ -51,8 +54,8 @@ Low byte:	Meaning:			Verbose:
 
 0		nop				do nothing
 1		read				will read the ammount of words specified by the high 3 bytes of the word sent to tape
-2		seek				will make the tape seek to the position specified by the high 3 bytes of the word sent to tape
-3		write				will interpret the
+2		seek				will make the tape wind to the position specified by the high 3 bytes of the word sent to tape
+3		write				will interpret the next <hight byte> words that are sent to the tape as data to write to the tape
 4		stop				will stop the current task, unless that task is writing input to tape
 5		tape inserted			will send back 1 if a tape is inserted, 0 if not
 6		tape readable			will send back 1 if a tape is readable, 0 if not
@@ -76,6 +79,7 @@ Example code:
 This is the program that runs automatically when progCom is turned on.
 It loads the stored program from a tape according to the specifications contained therein.
 It is stored at address 128.
+for other examples see libTape.txt
 
 .meta
 AUTLDR=FALSE

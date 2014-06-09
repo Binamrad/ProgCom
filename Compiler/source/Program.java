@@ -28,71 +28,92 @@ import java.util.LinkedList;
 //design strategy: keywords left, operators right
 
 public class Program {
+	private static LinkedList<String> getIncludeNames(String fileName) {
+		LinkedList<String> names = new LinkedList<String>();
+		BufferedReader bf;
+		if(COMPILER_DEBUG_ENABLED) {
+			System.out.println("including " + fileName);
+		}
+		String filePath = fileName.substring(0,fileName.lastIndexOf('/')+1);
+		try {
+			bf = new BufferedReader(new FileReader(fileName));
+			String s;
+			int lines = 0;
+			while( (s = bf.readLine()) != null) {
+				++lines;
+				String[] strs = s.split("\\s+");
+				if(strs.length > 0) {
+					int offset = 0;
+					if(strs[0].equals("")) {
+						offset++;
+					}
+					if(strs.length > offset) {
+						if(strs[offset].equals("//")) {
+							offset++;
+						}
+					} else {
+						continue;
+					}
+					
+					if(strs.length < 2+offset) {
+						if(COMPILER_DEBUG_ENABLED) {
+							System.out.println(s + " is too short");
+						}
+						continue;
+					}
+					
+					if(strs[offset].equals("//#include") || strs[offset].equals("#include")) {
+						if(strs.length > 2+offset && !strs[2+offset].startsWith("//")) {
+							bf.close();
+							throw new SyntaxErrorException("You cannot include multiple files in a single line");
+						}
+						if(!names.contains(filePath+strs[1+offset])) {
+							names.addLast(filePath+strs[1+offset]);
+							LinkedList<String> nextList = getIncludeNames(filePath+strs[1+offset]);
+							for(String s2 : nextList) {
+								names.add(s2);
+							}
+						}
+					} if(strs[offset].equals("//#asminclude") || strs[offset].equals("#asminclude")) {
+						if(strs.length > 2+offset && !strs[2+offset].startsWith("//")) {
+							bf.close();
+							throw new SyntaxErrorException("You cannot include multiple files in a single line");
+						}
+						//find some way of forcing the ASMGenerator to emit "#include <filename>" from here
+					} else {
+						if(COMPILER_DEBUG_ENABLED) {
+							System.out.println(s + " is not an include");
+						}
+					}
+					
+				}
+				
+			}
+			bf.close();
+			if(COMPILER_DEBUG_ENABLED) {
+				System.out.println("read " + lines + " lines");
+			}
+		} catch (FileNotFoundException e) {
+			throw new SyntaxErrorException("File not found: " + fileName);
+		} catch (IOException e) {
+			System.out.println("SHIT GOT FUCKED UP SON");
+			e.printStackTrace();
+			throw new InternalCompilerException("WHAT THE HELL");
+		}
+		return names;
+	}
 	
+	private final static boolean COMPILER_DEBUG_ENABLED = false;
 	public static void main(String[] args) {
 		//TODO:
-		// break+continue <- done
-		// make = viable in normal arithmetic <- done
-		// only save values of variables that have been altered <- done
-		// fix variable declarator to have int/float/whatever to the left in statement <- done
-		// fix variable declaration inside of if/while statements <- done
-		// function parameters/return values <- done
-		// implement multiple functions <- done
-		// function return <- done
-		// implement function calls <- done, probably
-		// make sure variables are marked as altered when arranged without data move <- done
-		// pointers <- done
-		// type checking <- done
-		// strings <- done
-		// literals <- done
-		// add more operations <- done
-		// address of operator <- done
-		// optimisation: when dereferencing, the destination don't have to be read from stack <- done
-		// char <- done
-		// floating point math <- done
-		// make sure all NullPointerExceptions are replaced with appropriate local variant <- done
-		// add compound assignments <- +=, -=, *= etc, and find a clever way to do it <- done
-		// do a pass on function return parameters, only arrange on $ = or $=; <- done
-		// inline assembler <- done
-		// there might be data loss at arrange/clearvars. This should be fixed <- done?
-		// global variables <- done
-		// solve variable allocation <- done
-		// free temporary variables after function calls <- done
-		// allow variable declaration in loops and if-statements <- done
-		// optimise variable saving/loading in loops and if-statements <- done
-		// there is probably something wrong with branching code, invert branches <- done
-		// find some way of not needlessly storing temporary variables at function calls <- done
-		// increment, decrement operators: ++, --, +++, --- <- done
-		// optimise conditional branching code <- done
-		// make sure proper type is given to variables after a comparison (int) <- done
-		// break and continue needs to restore proper state (preCondState, postCondState) <- done
-		// make sure floating point is respected in comparison operations, and other operations too <- done, except for increment/decrement
-		// check that literals can be used anywhere variables can <- done?
-		// add bitshifting operators <- done
-		// type casting <- done
-		// include files <- done-ish
-		// find some way to optimise the state restore (from loops and if-statements etc.) <- done
-		// make sure function calls do not allocate variables when there is no return value, when not using $=; and otherwise <- done?
-		// check types when returning from a function. And calling it, apparently <- done
-		// function pointers <- done
-		// see what is up with return, it seems to be overly careful with what data it saves when returning values <- done
-		// logical &&, ||, ^^ <- done
-		// make sure global variables can be used as parameters to functions
-		// make sure line number is printed out when there is an error <- done
-		// fixed a bug where variables were not properly recognised as changed after incrementation/decrementation
-		// optimisation: when using literals, try to fold them into the instruction <- done
-		// when returning, save all globals <- done
-		// optimisation: make 0 a variable tied to r0, accessible in all functions <- done
-		// optimisation: increment the number of variables stored to stack after things are stored there rather than when they are incremented <- done, ish
-		// when arranging variables for assembler, reverse order <- done
-		// make sure it is not possible to get a pointer outside of allocated stack space with the address of operator <- done
 		
 		//up next;
-		// #include/#asminclude
+		//#asminclude
 		
 		
 		//NEED:
-		
+		// when available, arithmetical right shift, >>>
+		// specify strings and addresses in global variables
 		
 		//WANT:
 		// volatile <- put in asmgen somewhere. will have to wait for emulator rewrite(?)
@@ -101,27 +122,33 @@ public class Program {
 		// optimise assignments, currently seems to use 2 instructions where 1 would suffice sometimes
 		// optimisation: an if statement followed by break/continue where the state need not be restored should be merged into one instruction
 		// optimisation: create a proper (optimal) recursive function for state restore
-		// when available, arithmetical right shift, >>>
 		// optimise post decrements, currently mov addi, could be reduced to single addi but requires a certain effort to implement
 		// optimisation: tail recursion
 		// optimisation: in loops where a function call is used, move some variables to higher registers so restore is not needed
-		// specify strings in global variables
 		
-		//I'm too lazy too look up what the exact value is
+		//I'm too lazy too look up what the correct thing to check for is
 		if(args == null || args.length == 0) {
 			//ask the user for a list of files
 			System.out.println("Specify a list of filenames separated by spaces: ");
 			 BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 			String s = "";
-			try {//I fucking hate java sometimes...
+			try {
 				s = br.readLine();
 			} catch (IOException e) {
-				System.out.println("SPECIFY SOME FILES NEXT TIME YOU DOOFUS!");
+				System.out.println("No files specified");
 			}
 			args = s.split(" ");
 		}
 		LinkedList<Token> tokens = new LinkedList<Token>();
+		LinkedList<String> files = new LinkedList<String>();
 		for(String fileName : args) {
+			if(!files.contains(fileName)) {
+				files.add(fileName);
+			}
+			files.addAll(getIncludeNames(fileName));
+		}
+		
+		for(String fileName : files) {
 			try {
 				BufferedReader bf = new BufferedReader(new FileReader(fileName));
 				String line = bf.readLine();
@@ -300,7 +327,7 @@ public class Program {
 	
 	//destination operand operand operators.
 	private boolean isDOOoperator(String s) {
-		String[] doo_operators = { "+", "-", "*", "/", "%", "|", "^", "&", "<", ">", "<=", ">=", "<<", ">>", "&&", "||", "^^", "==" };
+		String[] doo_operators = { "+", "-", "*", "/", "%", "|", "^", "&", "<", ">", "<=", ">=", "<<", ">>", "&&", "||", "^^", "==", "!=" };
 		for(String op : doo_operators) {
 			if(op.equals(s)) return true;
 		}
@@ -477,7 +504,9 @@ public class Program {
 	//arithmetic on the form: destination operand operand
 	private boolean aritm_doo() {
 		Token t = peek();
-		//System.out.println("aritm_doo: " + t);
+		if(COMPILER_DEBUG_ENABLED) {
+			System.out.println("aritm_doo: " + t);
+		}
 		if(!(t.type.equals("operator") && isDOOoperator(t.value))) return false;
 		next();
 		
@@ -491,23 +520,65 @@ public class Program {
 		
 		String type1 = types.getVar(var1).type;
 		String type2 = types.getVar(var2).type;
+		if(!types.typeCompatible(type1, type2)) {
+			throw new SyntaxErrorException("Missmatched types: " + var1 + ":" + type1 + ", " + var2 + ":" + type2 + " at line " + t.line);
+		}
 		String typeResult = types.getTypeResult(type1, type2);
 		if(isComparison(t.value)) typeResult = "int";
 		
-		if(!types.typeCompatible(type1, type2)) throw new SyntaxErrorException("missmatched types: " + var1 + ", " + var2 + " at line " + t.line);
 		String dest;
+		boolean reuseVar1 = false;
+		boolean reuseVar2 = false;
+		boolean hasAssigned = false;
 		if(peek().value.equals("=")) {
 			//this will need to be expanded later on
+			hasAssigned = true;
 			next();
 			dest = variableStack.pop();
 			if(!types.typeCompatible(types.getVar(dest).type, typeResult)) throw new SyntaxErrorException("Incompatible types at line " +t.line);
 		} else {
-			dest = getTemporaryVar(typeResult);
+			if(var1.startsWith("__TMP")) {
+				reuseVar1 = true;
+				dest = var1;
+				retypeTmpVar(var1, typeResult);
+			} else if(var2.startsWith("__TMP")) {
+				reuseVar2 = true;
+				dest = var2;
+				retypeTmpVar(var2, typeResult);
+			} else {
+				dest = getTemporaryVar(typeResult);
+			}
 		}
 		
 		gen.comment(dest+"="+var1+t.value+var2);
 		if(t.value.equals("+")) {
-			gen.add(dest, var1, var2, typeResult);
+			//if the next operation is "#", fold the addition into the next instruction
+			Token t2 = peek();
+			if(t2.type.equals("operator") && t2.value.equals("#") && !hasAssigned) {
+				next();
+				//do something to resolve types here
+				if(!types.isPointer(typeResult)) {
+					throw new SyntaxErrorException("Tried to dereference non-pointer type ("+typeResult+") at line: " + t2.line);
+				}
+				//do another pass to resolve dest here
+				//set typeresut to the right type
+				typeResult = typeResult.substring(0, typeResult.length()-1);
+				//check if next operator is "="
+				t2 = peek();
+				if(t2.type.equals("operator") && t2.value.equals("=")) {
+					next();
+					dest = variableStack.pop();
+				} else if(dest.startsWith("__TMP")) {
+					//reallocate the temporary thing to right
+					retypeTmpVar(dest, typeResult);
+				}
+				//perform typeCheck
+				if(!types.typeCompatible(types.getVar(dest).type, typeResult)) throw new SyntaxErrorException("Incompatible types at line " +t2.line);
+				gen.comment(dest+"="+"("+var1+"+"+var2+")*");
+				gen.dereference_tworeg(dest, var1, var2);
+			} else {
+				gen.add(dest, var1, var2, typeResult);
+			}
 		} else if(t.value.equals("-")) {
 			gen.sub(dest, var1, var2, typeResult);
 		} else if(t.value.equals("/")) {
@@ -549,8 +620,16 @@ public class Program {
 		}
 		
 		variableStack.push(dest);
-		freeTmpVar(var1);
-		freeTmpVar(var2);
+		if(reuseVar1) {
+			retypeTmpVar(var1, typeResult);
+		} else {
+			freeTmpVar(var1);
+		}
+		if(reuseVar2) {
+			retypeTmpVar(var2, typeResult);
+		} else {
+			freeTmpVar(var2);
+		}
 		//we need to add this variable and the previous one to the
 		return aritm();
 	}
@@ -568,22 +647,58 @@ public class Program {
 		
 		
 		String type1 = types.getVar(var1).type;
+		
+		if(!types.typeCompatible(type1, "int")) throw new SyntaxErrorException("missmatched types: " + var1 + ":"+ type1 + ", " + literal + ":int" + " at line " + t.line);
 		String typeResult = types.getTypeResult(type1, "int");
 		
-		if(!types.typeCompatible(type1, "int")) throw new SyntaxErrorException("missmatched types: " + var1 + ", " + literal + " at line " + t.line);
+		boolean reuseVar = false;
+		boolean hasAssigned = false;
 		String dest;
 		if(peek().value.equals("=")) {
 			//this will need to be expanded later on
 			next();
 			dest = variableStack.pop();
+			hasAssigned = true;
 			if(!types.typeCompatible(types.getVar(dest).type, typeResult)) throw new SyntaxErrorException("Incompatible types at line " +t.line);
 		} else {
-			dest = getTemporaryVar(typeResult);
+			if(var1.startsWith("__TMP")) {
+				dest = var1;
+				retypeTmpVar(dest, typeResult);
+				reuseVar = true;
+			} else {
+				dest = getTemporaryVar(typeResult);
+			}
 		}
 		
 		gen.comment(dest+"="+var1+t.value+""+literal);
 		if(t.value.equals("+")) {
-			gen.add_lit(dest, var1, literal, typeResult);
+			//if the next operation is "#", fold the addition into the next instruction
+			Token t2 = peek();
+			if(t2.type.equals("operator") && t2.value.equals("#") && !hasAssigned) {
+				next();
+				//do something to resolve types here
+				if(!types.isPointer(typeResult)) {
+					throw new SyntaxErrorException("Tried to dereference non-pointer type ("+typeResult+") at line: " + t2.line);
+				}
+				//do another pass to resolve dest here
+				//set typeresut to the right type
+				typeResult = typeResult.substring(0, typeResult.length()-1);
+				//check if next operator is "="
+				t2 = peek();
+				if(t2.type.equals("operator") && t2.value.equals("=")) {
+					next();
+					dest = variableStack.pop();
+				} else if(dest.startsWith("__TMP")) {
+					//reallocate the temporary thing to right
+					retypeTmpVar(dest, typeResult);
+				}
+				//perform typeCheck
+				if(!types.typeCompatible(types.getVar(dest).type, typeResult)) throw new SyntaxErrorException("Incompatible types at line " +t2.line);
+				gen.comment(dest+"="+"("+var1+"+"+literal+")*");
+				gen.dereference(dest, var1, literal);
+			} else {
+				gen.add_lit(dest, var1, literal, typeResult);
+			}
 		} else if(t.value.equals("-")) {
 			gen.sub_lit(dest, var1, literal, typeResult);
 		} else if(t.value.equals("/")) {
@@ -607,7 +722,9 @@ public class Program {
 		}
 		
 		variableStack.push(dest);
-		freeTmpVar(var1);
+		if(!reuseVar) {
+			freeTmpVar(var1);
+		}
 		//we need to add this variable and the previous one to the
 		return aritm();
 	}
@@ -650,12 +767,14 @@ public class Program {
 	
 	//tries to perform all arithmetic actions, returns true if they succeed
 	private boolean aritm() {
-		//System.out.println("next token: "+peek());
-		//System.out.println("vars on stack: ");
-		//for(String s : variableStack) {
-		//	System.out.println(types.getVar(s));
-		//}
-		
+		if(COMPILER_DEBUG_ENABLED) {
+			System.out.println("next token: "+peek());
+			System.out.println("vars on stack: ");
+			for(String s : variableStack) {
+				System.out.println(types.getVar(s));
+			}
+		}
+			
 		return aritm_doo() || aritm_do() || aritm_d() || aritm_hybridAssign() || pointerAritm() || literal() || variable() || assign() || funcCall() || end() || doNothing() || typeCast();
 	}
 	
@@ -696,7 +815,9 @@ public class Program {
 		if(!t.value.equals("{")) return false;
 		next();
 		
-		//System.out.println("BLOCK START");
+		if(COMPILER_DEBUG_ENABLED) {
+			System.out.println("BLOCK START");
+		}
 		
 		boolean hasReturn = false;
 		while(true) {
@@ -833,6 +954,7 @@ public class Program {
 		if(variableStack.size() != 1) throw new SyntaxErrorException("Multiple or no variables on evaluation stack at conditional branch statement at line " + t.line);
 		//branch to label
 		String var = variableStack.pop();
+		assertVarExists(var, t.line);
 		gen.iftype_branch(label, var);
 		freeTmpVar(var);
 		return;
@@ -1195,7 +1317,8 @@ public class Program {
 		t = peek();
 		if(t.type.equals("operator") && t.value.equals("=")) {
 			next();
-			//how to handle strings? not quite sure if I allowed them in the data section. TODO: add possibility for labels in data section
+			//how to handle strings? not quite sure if I allowed them in the data section. TODO: add possibility for labels in data section <- done
+			//TODO: add support for strings
 			
 			//what can we do here?
 			// * pointers of all types, initialised to integers.
@@ -1277,19 +1400,32 @@ public class Program {
 		conditional_branch(label);
 		Tuple<String[], Boolean[]> state = gen.saveState();
 		
-		if(!statement()) throw new SyntaxErrorException("You did the if-statement woring. Fix it. (at line " + t.line  + ")");
+		if(!statement()) throw new SyntaxErrorException("Invalid if-statement at line " + t.line +"; following statement missing or malformed");
 		
 		//after the if-statement all variables should be reloaded, since we no longer know the register layout
 		gen.restoreState(state);
+		
+		if(COMPILER_DEBUG_ENABLED) {
+			//print the state
+			System.out.println("Restored variables: ");
+			for(int i = 0; i < state.x.length; ++i){
+				System.out.println(state.x[i]+";"+state.y[i]);
+			}
+		}
+		
 		//return elsedo(label);//change to true
 		t = peek();
 		if(t.type.equals("keyword") && t.value.equals("else")) {
 			next();
+			
 			//save all registers and unassociate the values of the registers with the variables
 			//gen.clearVars();
 			//add a branch to end of if-statement
 			gen.branch_plain("end"+label);//prepend "end here too
 			
+			//make sure that the else statement doesn't disappear due to the dead code check
+			if(codeIsDead()) stopDeadCode();
+			if(codeIsDead()) startDeadCode();//I'm not sure if this is right, but I think so. The whole dead code detection thing is a bit of a cludge.
 			
 			gen.putLabel(label);
 			if(!statement()) throw new SyntaxErrorException("Keyword 'else' must be followed by a valid statement. Error at line " + t.line);
@@ -1301,7 +1437,7 @@ public class Program {
 		} else {
 			//gen.clearVars();
 			if(codeIsDead()) stopDeadCode();
-			gen.putLabel(label);//this is wrong, prepend "end" here, this should be the label that branches to the if-statement
+			gen.putLabel(label);
 		}
 		
 		gen.comment("END IF");
@@ -1361,6 +1497,11 @@ public class Program {
 			} else {
 				dest = getTemporaryVar("int");
 			}
+			
+			if(COMPILER_DEBUG_ENABLED) {
+				System.out.println("literalTypeCheck: dest: " + dest + " destType: " + types.getVar(dest) + "");
+			}
+			assertVarExists(dest, t.line);
 			//perform type checking
 			if(!types.getVar(dest).type.equals("int") && !types.getVar(dest).type.endsWith("#")) throw new SyntaxErrorException("Cannot assign an int to a " + types.getVar(dest).type + " at line " + t.line);
 			
@@ -1442,8 +1583,10 @@ public class Program {
 			gen.comment(dest+"<-"+var);
 			gen.indirectAssign_wr(dest, var);
 			
-			//push back original value to stack
+			//push value back to stack
 			variableStack.push(var);
+			//free temporary variables from the assigning thing
+			freeTmpVar(dest);
 			return aritm();
 		}
 		
@@ -1458,23 +1601,31 @@ public class Program {
 		//perform some more advanced metrics to get destination variable
 		//awful copy-paste coding here
 		String dest;
+		boolean varReuse = false;
 		if(peek().value.equals("=")) {
 			//this will need to be expanded later on
 			next();
 			dest = variableStack.pop();
 			if(!types.typeCompatible(types.getVar(dest).type, varType)) throw new SyntaxErrorException("Incompatible types: " + types.getVar(dest).type + " and " + varType + " at line " + t.line);
 		} else {
-			dest = getTemporaryVar(varType);
+			if(var.startsWith("__TMP")) {
+				dest = retypeTmpVar(var, varType);
+				varReuse = true;
+			} else {
+				dest = getTemporaryVar(varType);
+			}
 		}
 		gen.comment(dest+"="+var+t.value);
 		
 		if(t.value.equals("#")) {
-			gen.dereference(dest, var);
+			gen.dereference(dest, var, 0);
 		} else if(t.value.equals("@")) {
 			gen.addressOf(dest, var, fpointer);
 		}
 		variableStack.push(dest);
-		freeTmpVar(var);
+		if(!varReuse) {
+			freeTmpVar(var);
+		}
 		return aritm();
 	}
 	
@@ -1542,21 +1693,31 @@ public class Program {
 		String type = getType();
 		//find )
 		t = next();
-		if(!(t.type.equals("delimeter") && t.value.equals(")"))) throw new SyntaxErrorException("WHAT NOT ')' IN TYPECAST?! at line " + t.line);
+		if(!(t.type.equals("delimeter") && t.value.equals(")"))) throw new SyntaxErrorException("Missing ')' in type casting at line " + t.line);
 		//make copy of top of stack
 		//readvar
 		String src = variableStack.pop();
 		assertVarExists(src, t.line);
+		boolean reuseVar = false;
 		//gettmpvar
 		String typeFrom = types.getVar(src).type;
-		String dest = getTemporaryVar(type);
-		//optimise this by seeing if i can get the next thing from variable stack
+		String dest;
+		if(src.startsWith("__TMP")) {
+			dest = retypeTmpVar(src, type);
+			reuseVar = true;
+		} else {
+			dest = getTemporaryVar(type);
+		}
+		//optimise this by seeing if i can get the destination from variable stack
+		//eg: dest src(type)=;
 		
 		//cast to corrent type
 		gen.comment(dest + "=(" + type + ")"+src);
 		gen.typeConvert(dest,src,typeFrom,type);
 		variableStack.push(dest);
-		freeTmpVar(src);
+		if(!reuseVar) {
+			freeTmpVar(src);
+		}
 		
 		return aritm();
 	}
@@ -1687,8 +1848,16 @@ public class Program {
 		whilePostCondState.push(postCondState);
 		
 		//find statement
-		if(!statement()) throw new SyntaxErrorException("While statement needs a statement following it, fix it. Error at line " + t.line);
+		if(!statement()) throw new SyntaxErrorException("While statement needs a statement following it. Error at line " + t.line);
 		gen.restoreState(state);
+		
+		if(COMPILER_DEBUG_ENABLED) {
+			//print the state
+			System.out.println("Restored variables: ");
+			for(int i = 0; i < state.x.length; ++i){
+				System.out.println(state.x[i]+";"+state.y[i]);
+			}
+		}
 		
 		gen.branch_plain(label);
 		if(codeIsDead()) stopDeadCode();
@@ -1820,6 +1989,17 @@ public class Program {
 			gen.noSave(varName);
 			gen.unload(varName);
 		}
+	}
+	
+	// this will not work atm, see if there is a possible recode of the section getTmpVar appears in.
+	private String retypeTmpVar(String var, String newType) {
+		if(var.startsWith("__TMP")) {
+			types.removeVar(var);
+			types.storeVar(new Variable(var, newType));
+		} else {
+			throw new InternalCompilerException("Attempted to re-type a non-temporary variable");
+		}
+		return var;
 	}
 	
 	int uniqueLabel = 1;

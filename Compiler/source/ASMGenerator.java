@@ -185,8 +185,18 @@ public class ASMGenerator {
 		addInst3im("wr", param1, dest, "0");
 	}
 	
-	public void dereference(String dest, String param1) {
-		addInst3imFree("rd", dest, param1, "0");
+	public void dereference(String dest, String param1, int offset) {
+		String reg1 = vars.freeVar(dest);
+		String reg2 = vars.load(param1);
+		out.add("rd", reg1, reg2, ""+offset);
+	}
+	
+	public void dereference_tworeg(String dest, String param1, String param2) {
+		String reg1 = vars.freeVar(dest);
+		String reg2 = vars.load(param1);
+		String reg3 = vars.load(param2);
+		out.add("rdr", reg1, reg2, reg3);
+		
 	}
 	
 	public void addressOf(String dest, String param1, boolean force) {
@@ -250,11 +260,20 @@ public class ASMGenerator {
 		String regDest = vars.freeVar(dest);
 		String reg1 = vars.load(param1);
 		String reg2 = vars.load(param2);
-		out.add("movi", regDest, "1");
+		String regTemp;
+		if(regDest.equals(reg1) || regDest.equals(reg2)) {
+			regTemp = "ex";
+		} else {
+			regTemp = regDest;
+		}
+		out.add("movi", regTemp, "1");
 		out.add("bne", reg1, "r0", "1");
-		out.add("movi", regDest, "0");
+		out.add("movi", regTemp, "0");
 		out.add("bne", reg2, "r0", "1");
-		out.add("movi", regDest, "0");
+		out.add("movi", regTemp, "0");
+		if(!regTemp.equals(regDest)) {
+			out.add("mov", regDest, regTemp);
+		}
 	}
 	
 	//return 1 if param1 or param2 non-zero, 0 otherwise
@@ -262,11 +281,20 @@ public class ASMGenerator {
 		String regDest = vars.freeVar(dest);
 		String reg1 = vars.load(param1);
 		String reg2 = vars.load(param2);
-		out.add("movi", regDest, "0");
+		String regTemp;
+		if(regDest.equals(reg1) || regDest.equals(reg2)) {
+			regTemp = "ex";
+		} else {
+			regTemp = regDest;
+		}
+		out.add("movi", regTemp, "0");
 		out.add("beq", reg1, "r0", "1");
-		out.add("ori", regDest, regDest, "1");
+		out.add("ori", regTemp, regTemp, "1");
 		out.add("beq", reg2, "r0", "1");
-		out.add("ori", regDest, regDest, "1");
+		out.add("ori", regTemp, regTemp, "1");
+		if(!regTemp.equals(regDest)) {
+			out.add("mov", regDest, regTemp);
+		}
 	}
 	
 	//return 1 if precisely 1 of param1 and param2 non-zero, 0 otherwise
@@ -274,11 +302,20 @@ public class ASMGenerator {
 		String regDest = vars.freeVar(dest);
 		String reg1 = vars.load(param1);
 		String reg2 = vars.load(param2);
-		out.add("movi", regDest, "0");
+		String regTemp;
+		if(regDest.equals(reg1) || regDest.equals(reg2)) {
+			regTemp = "ex";
+		} else {
+			regTemp = regDest;
+		}
+		out.add("movi", regTemp, "0");
 		out.add("beq", reg1, "r0", "1");
-		out.add("xori", regDest, regDest, "1");
+		out.add("xori", regTemp, regTemp, "1");
 		out.add("beq", reg2, "r0", "1");
-		out.add("xori", regDest, regDest, "1");
+		out.add("xori", regTemp, regTemp, "1");
+		if(!regTemp.equals(regDest)) {
+			out.add("mov", regDest, regTemp);
+		}
 	}
 	
 	//this should probably be logical not, not equal to r0
@@ -306,7 +343,9 @@ public class ASMGenerator {
 	
 	public void typeConvert(String dest, String src, String typeFrom, String typeTo) {
 		if(typeFrom.equals(typeTo)) {
-			assign(dest, src);
+			if(dest != src) {
+				assign(dest, src);
+			}
 			return;
 		}
 		boolean done = false;
@@ -331,7 +370,9 @@ public class ASMGenerator {
 			done = true;
 		}
 		if(!done) {
-			assign(dest, src);
+			if(dest != src) {
+				assign(dest, src);
+			}
 		}
 	}
 	

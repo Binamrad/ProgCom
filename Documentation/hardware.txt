@@ -1,4 +1,5 @@
 A brief summary of the hardware in progcom and the relevant memory addresses and interrupts associated with them.
+The labels are available by including libLabel.txt
 
 Control:
 
@@ -55,8 +56,9 @@ interrupts	cause
 none		--
 
 
-interrupts
+Interrupts:
 
+address
 44		GLOBAL_IADRESS			the adress the execution jumps to at interrupts, see interrupts below.
 45		GLOBAL_IENABLE			interrupt enable, see interrupts.
 
@@ -86,6 +88,7 @@ address		label				verbose
 59		GLOBAL_CLOCK			the computer clock. contains the complete ammount of cycles that the computer has spent turned on.
 60		GLOBAL_TIMER			the cpu:s timer is accessible at this adress. it contains the number of cycles that has elapsed since the timer last reset. can be written to and read from as normal.
 61		GLOBAL_TIMER_MAX		the value at which the timer starts over at zero. if set to 0, the timer never resets.
+62		--				the 64-bit extend register for the clock
 
 interrupts	cause
 256		automatic timer reset
@@ -112,10 +115,10 @@ Tape drive:
 (for a more detailed explaination of the tape drive: see tapeDrive.txt)
 
 address		label				verbose
-64		GLOBAL_TAPE_OUT
-65		GLOBAL_TAPE_IN
-66		GLOBAL_TAPE_STATUS
-67		GLOBAL_TAPE_INTERRUPT
+64		GLOBAL_TAPE_OUT			output buffer
+65		GLOBAL_TAPE_IN			input bufffer
+66		GLOBAL_TAPE_STATUS		status register
+67		GLOBAL_TAPE_INTERRUPT		tape error status register
 
 interrupts	cause
 260		notification, IBF or OBE

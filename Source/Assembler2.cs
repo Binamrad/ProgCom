@@ -279,7 +279,7 @@ namespace ProgCom
             //0x3c --
             //0x3d --
             //Instr.Add("rdx", new Instruction(0x3e, false, true, false, true, false, false, false, true, 0));
-            Instr.Add("inti", new Instruction(0x37, false, false, false, true, false, false, true, false, 0));
+            Instr.Add("inti", new Instruction(0x3f, false, false, false, true, false, false, true, false, 0));
 
             instructions = Instr;
         }
@@ -385,6 +385,7 @@ namespace ProgCom
                 if (s.StartsWith("#include")) {
                     String s2 = Util.cutStrBefore(s, " ");
                     includes.AddLast(s2);//we should include the file asap, otherwise macro definitions will be unrecognised here.
+                    //the reason being, we include all the lines in the file after this, but we have already checked for all the macros
                     continue;
                 }
 
@@ -517,7 +518,7 @@ namespace ProgCom
             }
             foreach (String line in f.data) {
                 if (!line.EndsWith(":")) {
-                    Int32[] res = evaluateNumerical(line);
+                    Int32[] res = evaluateNumerical(line, labels);
                     foreach (Int32 n in res) {
                         retArr[currentInstruction] = n;
                         ++currentInstruction;
@@ -588,7 +589,7 @@ namespace ProgCom
                     adress |= evaluateLabel(words[wordNum], inst.mustRel, inst.mustAbs, PIC, lineLocation, labels);//i changed = to |= here, if something broke, change back
                 }
                 catch (FormatException E) {
-                    throw E;//just let these exceptions pass
+                    throw new FormatException(E.Message + " in: " + s);//update description and let instruction pass
                 }
                 catch (Exception E) {
                     throw new FormatException("Internal assembler error: \"" + E + "\" in compile/evaluateLabel");
@@ -697,7 +698,7 @@ namespace ProgCom
                             i = addAddr(i, subNext, addNext, out subNext, out addNext, tmp, s);
                         } else if (mustAbs) {
                             if (PIC) {
-                                throw new FormatException("Instruction requiring absolute adress used in conjunction with PIC mode. Use %abs for closest approximation or manually calculate the absolute adress: " + s);
+                                throw new FormatException("Instruction requiring absolute address used in conjunction with PIC mode. Use %abs for closest approximation or manually calculate the absolute adress: " + s);
                             }
                             //absolute
                             i = addAddr(i, subNext, addNext, out subNext, out addNext, tmp, s);
@@ -716,7 +717,7 @@ namespace ProgCom
                     }
                     continue;
                 } else if (defines.ContainsKey(localLabel[0]))//check if the label was a #defined value. this should always use absolute values unless otherwise specified. the GLOBAL_WHATEVER things should be confined here as well.
-            {
+                {
                     if (localLabel.Length == 2) {
                         if (localLabel[1].Equals("rel")) {
                             if (PIC) {
@@ -768,23 +769,26 @@ namespace ProgCom
             return i;
         }
 
-        Int32[] evaluateNumerical(String s)
+        //turns a string into their numerical representations
+        Int32[] evaluateNumerical(String s, Dictionary<String, int> labels)
         {
             String[] strs = s.Split(' ');
             Int32[] res = new Int32[strs.Length];
             for (int i = 0; i < strs.Length; ++i) {
                 String str = strs[i];
                 try {
-                    if (defines.ContainsKey(str)) { //check if line is in defines
+                    if (labels.ContainsKey(str)) {
+                        res[i] = labels[str];
+                    } else if (defines.ContainsKey(str)) { //check if line is in defines
                         res[i] = defines[str];
                     } else if (str.Contains(".")) { //Decimal point means we're treating this as a float
                         res[i] = Util.ftoi(Util.parseTo<Single>(str));
                     } else {
                         res[i] = (Int32)Util.parseTo<UInt32>(str);
-                    }
+                    } // add label support here somewhere*/
                 }
                 catch (Exception) {
-                    throw new FormatException("Not a parseable number: " + str);
+                    throw new FormatException("Not a parseable number or label: " + str + " in: " + s);
                 }
             }
             return res;
