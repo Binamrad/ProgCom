@@ -5,16 +5,33 @@
 #include libLabel.txt
 #include libASCII.txt
 
+.data
+textColor:
+0x01
+.text
+
+
 #global setBgCol
 setBgCol:
 	andi	r1, r1, 15;sanity check
-	wr	r1, r0, colBackground
+
+	rd	r2, r0, textColor
+	andi	r2, r2, 0x0f
+	sli	r1, r1, 4
+	or	r1, r1, r2
+
+	wr	r1, r0, textColor
 	ret
 
 #global setFontCol
 setFontCol:
 	andi	r1, r1, 15;sanity check
-	wr	r1, r0, colFont
+
+	rd	r2, r0, textColor
+	andi	r2, r2, 0xf0
+	or	r1, r1, r2
+
+	wr	r1, r0, textColor
 	ret
 
 ;takes a char in r1 and puts it at the screen pointer
@@ -33,25 +50,27 @@ putChar:
 	mov	r2, r0
 	
 	;add color to character
-	rd	r3, r0, colFont
+	rd	r3, r0, textColor
 	sli	r3, r3, 8
-	or	r1, r1, r3
-	rd	r3, r0, colBackground
-	sli	r3, r3, 12
 	or	r1, r1, r3
 	
 	;get address
 	andi	r3, r2, 1
 	sri	r2, r2, 1
+	;take scrolling into account
+	rd	r5, r0, GLOBAL_SCREEN_SCROLL
+	add	r2, r2, r5
+	addi	r2, r2, 496
+	andi	r2, r2, 2047
 
 	;set character at proper position
 	sli	r3, r3, 4
 	shl	r1, r1, r3
 
 	;read destination character
-	rd	r4, r2, GLOBAL_SCREEN + 496
+	rd	r4, r2, GLOBAL_SCREEN
 
-	;clear space for the character
+	;clear space for the character <- TODO:remove, like, 5 instructions here
 	movi	r5, 0xffff
 	shl	r5, r5, r3
 	not	r5
@@ -59,7 +78,7 @@ putChar:
 	
 	;merge character and write back
 	or	r1, r1, r4
-	wr	r1, r2, GLOBAL_SCREEN + 496
+	wr	r1, r2, GLOBAL_SCREEN
 
 	;increment screen_pointer and write back
 	rd	r1, r0, screen_pointer
@@ -149,30 +168,57 @@ printStrLn:
 	pop	ra
 	ret
 
+;character to fill with in r1
+#global fillScreen
+fillScreen:
+	sli	r1, r1, 16
+	rd	r2, r0, textColor
+	sli	r2, r2, 8
+	or	r1, r1, r2
+	sli	r2, r2, 16
+	or	r1, r1, r2
+
+	rd	r2, r0, GLOBAL_SCREEN_SCROLL
+	mov	r3, r2
+fillScreenLoop:
+	wr	r1, r2, GLOBAL_SCREEN+0
+	wr	r1, r2, GLOBAL_SCREEN+1
+	wr	r1, r2, GLOBAL_SCREEN+2
+	wr	r1, r2, GLOBAL_SCREEN+3
+	wr	r1, r2, GLOBAL_SCREEN+4
+	wr	r1, r2, GLOBAL_SCREEN+5
+	wr	r1, r2, GLOBAL_SCREEN+6
+	wr	r1, r2, GLOBAL_SCREEN+7
+
+	addi	r2, r2, 8
+	andi	r2, r2, 2047
+	bne	r2, r3, fillScreenLoop
+
+	ret
+
 #global scr_scroll
 scr_scroll:
-	movi	r3, 512
-	movi	r2, 0
-movScrLoop:
-	rd	r1, r2, GLOBAL_SCREEN + 16
-	wr	r1, r2, GLOBAL_SCREEN + 0
-	rd	r1, r2, GLOBAL_SCREEN + 17
-	wr	r1, r2, GLOBAL_SCREEN + 1
-	rd	r1, r2, GLOBAL_SCREEN + 18
-	wr	r1, r2, GLOBAL_SCREEN + 2
-	rd	r1, r2, GLOBAL_SCREEN + 19
-	wr	r1, r2, GLOBAL_SCREEN + 3
-	rd	r1, r2, GLOBAL_SCREEN + 20
-	wr	r1, r2, GLOBAL_SCREEN + 4
-	rd	r1, r2, GLOBAL_SCREEN + 21
-	wr	r1, r2, GLOBAL_SCREEN + 5
-	rd	r1, r2, GLOBAL_SCREEN + 22
-	wr	r1, r2, GLOBAL_SCREEN + 6
-	rd	r1, r2, GLOBAL_SCREEN + 23
-	wr	r1, r2, GLOBAL_SCREEN + 7
-	addi	r2, r2, 8
-	bl	r2, r3, movScrLoop
+	rd	r1, r0, GLOBAL_SCREEN_SCROLL
+	addi	r1, r1, 16
+	wr	r1, r0, GLOBAL_SCREEN_SCROLL
+	addi	r1, r1, 496
+	andi	r1, r1, 2047
+	movi	r2, 16
+scrollClearLine:
+	;clear last line on the screen
+	wr	r0, r1, GLOBAL_SCREEN
+	addi	r1, r1, 1
+	subi	r2, r2, 1
+	bi	r2, scrollClearLine
 	ret
+
+#global scr_scroll_down
+scr_scroll_down:
+	rd	r1, r0, GLOBAL_SCREEN_SCROLL
+	subi	r1, r1, 16
+	wr	r1, r0, GLOBAL_SCREEN_SCROLL
+	ret
+
 
 #global moveCursorBack
 moveCursorBack:
@@ -181,12 +227,32 @@ moveCursorBack:
 	bl	r1, r0, 2
 	wr	r1, r0, screen_pointer
 	ret
-	wr	r0, r0, screen_pointer
+	call	scr_scroll_down
+	movi	r1, 31
+	wr	r1, r0, screen_pointer
 	
 	ret
 
 ;*************************************************************************************
 ;input code below
+
+.data
+;set value after "input_function" to pointer to function that reads a keypress
+;function returns keycode in r1
+;r2 is either 1 or 0 depending on if there was a keypress to read or not.
+;function is also responsible for resetting all neccessary flags by itself
+#global libt_input_function
+libt_input_function:
+	get_keypress
+;called when the code needs to wait for input
+#global libt_input_wait_function
+libt_input_wait_function:
+	null_function
+.text
+
+;does nothing
+null_function:
+	ret
 
 
 ;get keyboard keypress, non-blocking
@@ -195,8 +261,11 @@ moveCursorBack:
 ;return keycode in r1
 #global get_keypress
 get_keypress:
-	rd	r2, r0, GLOBAL_KEYBOARD_NEWIN
+	rd	r2, r0, GLOBAL_KEYBOARD_STATUS
+	andi	r2, r2, 1
 	rd	r1, r0, GLOBAL_KEYBOARD
+	beq	r2, r0, 1
+	wr	r0, r0, GLOBAL_KEYBOARD_STATUS;make sure we don't read this char again
 	ret
 
 ;wait until a text-key has been pressed, then return it in r1
@@ -204,16 +273,48 @@ get_keypress:
 #global readChar
 readChar:
 	push	ra
-	movi	r3, 255;r3 is not modified by rdkb
+	push	a4
+	movi	a4, 255
+	br	rdc_nowait;we should not sleep every time we look for a keypress
 rdc_loop:
-	call	get_keypress
+	rd	r3, r0, libt_input_wait_function
+	callr	r3
+rdc_nowait:
+	rd	r3, r0, libt_input_function
+	callr	r3
+
 	beq	r2, r0, rdc_loop
-	wr	r0, r0, GLOBAL_KEYBOARD_NEWIN;make sure we don't read this char again
 	bl	r1, r0, rdc_loop
-	bl	r3, r1, rdc_loop
+	bl	a4, r1, rdc_loop
+	pop	a4
 	pop	ra
 	ret
+
+
+;rudimentary string editing tool.
+;pointer to string to be edited in r1
+;maximum string length in r2
+#global editString
+editString:
+	;print the string and then turn everything over to readStr, which has the functionality we need
+	push	a4
+	push	a5
+	push	a6
+	mov	a5, r1
+	mov	a6, r2
+	call	printStr
+	movi	a4, 0
+	mov	r1, a5
+	subi	r2, a6, 1
+editString_getStringSizeLoop:
+	rd	r5, r3, 1
+	beq	r5, r0, editString_endloop
+	addi	a4, a4, 1
+	br	editString_getStringSizeLoop
+editString_endloop:
+	br	readStrLoop
 	
+
 ;reads an enire string and stores it in the area pointed to by r1
 ;max length of string stored in r2
 ;enter is used to signify end of input
@@ -291,8 +392,3 @@ readStrEnd:
 screen_pointer:
 	0
 #define screen_max 32
-
-colBackground:
-	0
-colFont:
-	1

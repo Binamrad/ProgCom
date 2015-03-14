@@ -26,7 +26,7 @@ memory addresses:
 
 address		label			verbose
 68		GLOBAL_KEYBOARD 	keyboard output area
-69		GLOBAL_KEYBOARD_NEWIN	set to 1 when the keyboard has sent something to the computer
+69		GLOBAL_KEYBOARD_STATUS	bit 0 set to 1 when the keyboard has sent something to the computer. bit 1 enables input if set to 1
 
 interrupts	cause
-none		--
+262		new input

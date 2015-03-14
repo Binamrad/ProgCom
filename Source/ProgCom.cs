@@ -11,13 +11,16 @@ namespace ProgCom
     /*
      * TODO:
      * move numpad to new hardware interface <- done-ish, move numpad out of progcom class next
-     * add additional instructions; comparison operations
-     * additional peripherals: target relative position etc.
-     * improve keyboard interface <- interrupts?
-     * fix weirdness with gui objects
-     * screen drawing interrupts
-     * text offset registers
-     * memory management
+     * add additional instructions; comparison operations <- done-ish, document all instructions
+     * additional peripherals: target relative position etc. <- wait
+     * improve keyboard interface <- done
+     * fix weirdness with gui objects <- done?
+     * screen drawing interrupts <- wait
+     * double screen vram <- todo, when done update labels
+     * more screen modes <- wait
+     * text offset registers <- done
+     * memory management <- wait
+     * add additional correction for clock rate
      */
     public class ProgCom : PartModule
     {
@@ -27,7 +30,6 @@ namespace ProgCom
         private bool partActive = false;
         private bool partGUI;
         bool debug;
-        TapeDrive tapeDrive;
 
         /************************************************************************************************************************/
         //helper functions
@@ -114,21 +116,9 @@ namespace ProgCom
                     int im = CPU.getMem(CPU.PC) & 0xffff;
 
                     print("PC: " + CPU.PC + " opcode: " + opcode.ToString("X2") + " r" + rA + ": " + CPU.Registers[rA] + " r" + rB + ": " + CPU.Registers[rB] + " im: " + im + " rC: " + CPU.Registers[im&0x1f] + " ra: " + CPU.Registers[15] + " sp: " + CPU.Registers[14] + ", " + CPU.getMem((UInt16)(CPU.Registers[14] - 1)));
-                    print(tapeDrive.statusString());
                 }
                 
                 int cyclesElapsed = CPU.tick();
-                /*if (cyclesElapsed == 0) {//remove this sometime
-                    running = false;
-                    //stop the program
-                    break;
-                } else if (cyclesElapsed == -1) {
-                    //stop the program
-                    consoleWrite("Illegal instruction(" + CPU.Memory[CPU.PC - 1] + ") at address " + (CPU.PC - 1));
-                    print("Illegal instruction(" + CPU.Memory[CPU.PC - 1] + ") at address " + (CPU.PC - 1));
-                    running = false;
-                    break;
-                }*/
                 ticksElapsed += cyclesElapsed;
             }
             return ticksElapsed;
@@ -150,7 +140,7 @@ namespace ProgCom
             return newCode;
         }
 
-        private int load(String s, bool loadTape, int loadLocation)
+        private int load(String s, int loadLocation)
         {
             //what should I put into this iinterface?
             //we need to be able to do the following with programs:
@@ -163,22 +153,17 @@ namespace ProgCom
             Int32[] tape = loadAndMakeTape(s, loadLocation);
             consoleWrite("Program assembled!");
             //save tape
-            tapeDrive.saveTape(Util.cutStrAfter(s, ".") + ".pct", tape);
+            TapeDrive.saveTape(Util.cutStrAfter(s, ".") + ".pct", tape);
             consoleWrite("Tape created.");
-            //load program into memory
-            if (loadTape) {
-                tapeDrive.insertMedia(tape);
-                consoleWrite("Tape inserted.");
-            }
 
             consoleWrite("Done");
             return 0;
         }
 
-        protected int loadWrapper(String s, bool loadTape, int loadLocation)
+        protected int loadWrapper(String s, int loadLocation)
         {
             try {
-                return load(s, loadTape, loadLocation);
+                return load(s, loadLocation);
             }
             catch (FormatException f) {
                 print(f.Message);
@@ -257,27 +242,22 @@ namespace ProgCom
 
             windowID = Util.random();
 
-            if (tapeDrive == null) {
-                tapeDrive = new TapeDrive();
-                //insert a blank tape
-                Int32[] media = new Int32[256 * 1024];
-                media[1] = 4711;
-                tapeDrive.insertMedia(media);
-            }
             //connect various peripherals to the CPU
             //when possible, separate these out as normal partmodules
 
-            //connect tapedrive. When possible, add tape drive to appropriate stuff
-            CPU.hwConnect(tapeDrive);
+            //connect the console memory wrapper
             CPU.hwConnect(ConsoleMemWrapper);
 
             running = false;
             
-            //connect all hardware on this part
+            //iterate through all partmodules connected to the part, make sure all partmodules are aware of this part.
+            print("scanning for local progCom hardware...");
             foreach (PartModule pm in this.part.Modules) {
                 if (pm == this) continue;
+                //connect all hardware to this part
                 if (pm is IPCHardware) {
                     //print("HARDWARE IS FOUND");
+                    print("found " + pm.GetType().ToString());
                     try {
                         CPU.hwConnect((IPCHardware)pm);
                     }
@@ -285,14 +265,14 @@ namespace ProgCom
                         consoleWrite("Error when connecting hardware:");
                         consoleWrite(e.Message);
                     }
+                    catch (Exception e) {
+                        consoleWrite("Unexpected error when connecting hardware:");
+                        consoleWrite(e.Message);
+                    }
                 }
-            }
-
-            //make sure all partmodules can read the gui state
-            foreach (PartModule pm in this.part.Modules) {
-                if (pm == this) continue;
+                //make sure all partmodules can read the gui state
                 if (pm is PCGUIListener) {
-                    print("GUIListener found!");
+                    //print("GUIListener found!");
                     try {
                         ((PCGUIListener)pm).recGUIState(GUIstate);
                     }
@@ -312,6 +292,7 @@ namespace ProgCom
         {
             base.OnStart(state);
             if(state.Equals(PartModule.StartState.Editor)) return;//don't start anything in the editor
+            if (state.Equals(PartModule.StartState.PreLaunch)) return;//I think starting in prelaunch will fuck things up. Not sure though.
             print("initialising progCom..."+state.ToString());
             if ((windowPos.x == 0) && (windowPos.y == 0))//windowPos is used to position the GUI window, lets set it in the center of the screen
             {
@@ -335,8 +316,8 @@ namespace ProgCom
                 CPU.hasErrors = false;
                 foreach (String s in CPU.errorMessages) {
                     print(s);
-                    CPU.errorMessages.Clear();
                 }
+                CPU.errorMessages.Clear();
             }
 
             //we must make sure that, if the vessel is gains or loses focus, that the gui responds accordingly
@@ -481,6 +462,10 @@ namespace ProgCom
                 if (GUILayout.Button("KBD", GUIstate.kbd ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
                     {
                     GUIstate.kbd = !GUIstate.kbd;//toggle on/off
+                }
+                if (GUILayout.Button("TAP", GUIstate.tap ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+                    {
+                    GUIstate.tap = !GUIstate.tap;//toggle on/off
                 }
                 GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
@@ -638,44 +623,8 @@ namespace ProgCom
                     } else consoleWrite("Couldn't parse");
                     break;
                 case 2:
-                    if(S[0].Equals("insert")) {
-                        if(S[1].Equals("empty")) {
-                            Int32[] media = new Int32[1024 * 256];
-                            media[1] = 4711;
-                            tapeDrive.insertMedia(media);
-                        } else if(S[1].Contains('.')) {
-                            try {
-                                tapeDrive.insertMedia(tapeDrive.loadTape(S[1]));
-                                consoleWrite("Tape inserted!");
-                            }
-                            catch (Exception) {
-                                consoleWrite("Operation failed!");
-                            }
-                        }
-                    } else if(S[0].Equals("asm")) {
-                        loadWrapper(S[1], false, 256);
-                    } else if (S[0].Equals("eject")) {
-                        if (!S[1].Equals("null")) {//If this is the case, just throw away the tape (and insert an empty one?)
-                            //save the tape (and insert empty?)
-                            if (S[1].Contains('.')) {
-                                tapeDrive.saveTapeInternal(S[1]);
-                            } else {
-                                tapeDrive.saveTapeInternal(S[1]+".pct");
-                            }
-                        }
-                        Int32[] media = new Int32[1024 * 256];//this should possibly be null instead
-                        media[1] = 4711;
-                        tapeDrive.insertMedia(media);
-
-                    } else if (S[0].Equals("save")) {
-                        if (!S[1].Equals("null")) {//If this is the case, just throw away the tape (and insert an empty one?)
-                            //save the tape (and insert empty?)
-                            if (S[1].Contains('.')) {
-                                tapeDrive.saveTapeInternal(S[1]);
-                            } else {
-                                tapeDrive.saveTapeInternal(S[1] + ".pct");
-                            }
-                        }
+                    if(S[0].Equals("asm")) {
+                        loadWrapper(S[1], 256);
                     } else if (S[0].Equals("print")) {
                         if (Util.tryParseTo<UInt16>(S[1], out tmp)) {
                             for (int i = 0; i < 100; ++i) {
@@ -687,26 +636,18 @@ namespace ProgCom
                     } else consoleWrite("Couldn't parse");
                     break;
                 case 3:
-                    if(S[0].Equals("insert")) {
-                        if(S[1].Equals("asm")) {
+                    if (S[0].Equals("asm")) {
+                        if (Util.tryParseTo<UInt16>(S[2], out tmp)) {
                             //assemble some code and then stuff
-                            loadWrapper(S[2], true, 256);
+                            loadWrapper(S[1], tmp);
+                        } else {
+                            consoleWrite("Not A Number: " + S[2]);
                         }
                     } else consoleWrite("Couldn't parse.");
                     break;
-                case 4:
-                    if(S[0].Equals("insert")) {
-                        if(S[1].Equals("asm")) {
-                            if (Util.tryParseTo<UInt16>(S[3], out tmp)) {
-                                //assemble some code and then stuff
-                                loadWrapper(S[2], true, tmp);
-                            } else {
-                                consoleWrite("Not A Number: " + S[3]);
-                            }
-                        }
-                    } else consoleWrite("Couldn't parse.");
+                default:
+                    consoleWrite("Couldn't parse.");
                     break;
-
             }
         }
 

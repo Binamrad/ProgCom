@@ -28,7 +28,7 @@ address		label				verbose
 10		GLOBAL_SURFACE_NORTH		the northwards vector of the surface
 13		GLOBAL_VESSEL_X			the x vector of the scene coordinate system according to the ship coord. system.
 16		GLOBAL_VESSEL_Y			the y vector of the scene coordinate system according to the ship coord. system
-16		GLOBAL_VESSEL_HEADING		same as above
+16		GLOBAL_VESSEL_HEADING		same as above (it is quite possible that this has absolutely nothing to do with heading. I am investigating)
 19		GLOBAL_VESSEL_Z			the z vector of the scene coordinate system according to the ship coord. system
 22		GLOBAL_ORBITSPEED		the orbital speed vector (speed*direction) of the ship th scene coord. system
 25		GLOBAL_SURFACESPEED		the surface speed vector (speed*direction) of the ship in scene coord. system
@@ -130,8 +130,10 @@ Keyboard:
 
 address		label				verbose
 68		GLOBAL_KEYBOARD			keyboard output area
-69		GLOBAL_KEYBOARD_NEWIN		set to 1 when keyboard has new input
+69		GLOBAL_KEYBOARD_STATUS		shows if input has been received and enables interrupts
 
+interrupts	cause
+262		input received
 
 
 Monitor:

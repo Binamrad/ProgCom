@@ -260,20 +260,7 @@ public class ASMGenerator {
 		String regDest = vars.freeVar(dest);
 		String reg1 = vars.load(param1);
 		String reg2 = vars.load(param2);
-		String regTemp;
-		if(regDest.equals(reg1) || regDest.equals(reg2)) {
-			regTemp = "ex";
-		} else {
-			regTemp = regDest;
-		}
-		out.add("movi", regTemp, "1");
-		out.add("bne", reg1, "r0", "1");
-		out.add("movi", regTemp, "0");
-		out.add("bne", reg2, "r0", "1");
-		out.add("movi", regTemp, "0");
-		if(!regTemp.equals(regDest)) {
-			out.add("mov", regDest, regTemp);
-		}
+		out.add("land", regDest, reg1, reg2);
 	}
 	
 	//return 1 if param1 or param2 non-zero, 0 otherwise
@@ -281,20 +268,7 @@ public class ASMGenerator {
 		String regDest = vars.freeVar(dest);
 		String reg1 = vars.load(param1);
 		String reg2 = vars.load(param2);
-		String regTemp;
-		if(regDest.equals(reg1) || regDest.equals(reg2)) {
-			regTemp = "ex";
-		} else {
-			regTemp = regDest;
-		}
-		out.add("movi", regTemp, "0");
-		out.add("beq", reg1, "r0", "1");
-		out.add("ori", regTemp, regTemp, "1");
-		out.add("beq", reg2, "r0", "1");
-		out.add("ori", regTemp, regTemp, "1");
-		if(!regTemp.equals(regDest)) {
-			out.add("mov", regDest, regTemp);
-		}
+		out.add("lor", regDest, reg1, reg2);
 	}
 	
 	//return 1 if precisely 1 of param1 and param2 non-zero, 0 otherwise
@@ -302,20 +276,7 @@ public class ASMGenerator {
 		String regDest = vars.freeVar(dest);
 		String reg1 = vars.load(param1);
 		String reg2 = vars.load(param2);
-		String regTemp;
-		if(regDest.equals(reg1) || regDest.equals(reg2)) {
-			regTemp = "ex";
-		} else {
-			regTemp = regDest;
-		}
-		out.add("movi", regTemp, "0");
-		out.add("beq", reg1, "r0", "1");
-		out.add("xori", regTemp, regTemp, "1");
-		out.add("beq", reg2, "r0", "1");
-		out.add("xori", regTemp, regTemp, "1");
-		if(!regTemp.equals(regDest)) {
-			out.add("mov", regDest, regTemp);
-		}
+		out.add("lxor", regDest, reg1, reg2);
 	}
 	
 	//this should probably be logical not, not equal to r0
@@ -454,10 +415,10 @@ public class ASMGenerator {
 		}*/
 		vars.create(varNames);
 		//arrange all variables
-		arrange(varNames, false);
+		arrange(varNames, false, new LinkedList<String>());
 	}
 	
-	public void arrange(LinkedList<String> names, boolean readVars) {
+	public void arrange(LinkedList<String> names, boolean readVars, LinkedList<String> tryNotToSave) {
 		//don't spend any time in this function if names is empty
 		if(names.size() == 0) return;
 		
@@ -467,7 +428,7 @@ public class ASMGenerator {
 			s = s + " " + s2;
 		}
 		comment(s);
-		vars.arrange(names, readVars);
+		vars.arrange(names, readVars, tryNotToSave);
 	}
 	
 	public void createVariables(LinkedList<String> names) {
@@ -489,17 +450,19 @@ public class ASMGenerator {
 		vars.storeAll();
 	}
 	
-	public void clearVars() {
-		vars.clearAll();
+	public void clearVars(LinkedList<String> exceptions) {
+		vars.clearAll(exceptions);
 	}
 	
-	public void functionCall(String fname) {
-		out.put("\tcall\t"+fname);
+	public void functionCall(String fname, int params) {
+		out.functionCallOpts(params);
+		out.add("call", fname);
 		out.setHasFCall();
 	}
-	public void functionPointerCall(String varName) {
+	public void functionPointerCall(String varName, int params) {
 		vars.load(varName);
-		out.put("\tcallr\t"+vars.load(varName));
+		out.functionCallOpts(params);
+		out.add("callr",vars.load(varName));
 		out.setHasFCall();
 	}
 	
@@ -575,10 +538,10 @@ public class ASMGenerator {
 		out.endFunction(vars.getStackSize());
 	}
 	
-	public void functionReturn() {
+	public void functionReturn(int params) {
 		//TODO: when we add the possibility for callee-stored registers, they need to be restored here
 		comment("return");
-		out.functionReturn();
+		out.functionReturn(params);
 	}
 	
 	public void comment(String s) {

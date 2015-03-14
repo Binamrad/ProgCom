@@ -219,10 +219,33 @@ namespace ProgCom
             Instr.Add("fpushpi", new Instruction(0x15, false, false, false, false, false, false, false, false, 15));
             //0x16 extended instruction set, register instructions
             //Instr.Add("nop", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0000));
+            //partial moves
             Instr.Add("movbr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0800));
             Instr.Add("movhwr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0900));
             Instr.Add("movblr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0a00));
             Instr.Add("movhwlr", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x0b00));
+            //comparisons
+            Instr.Add("le", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1000));
+            Instr.Add("leq", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1100));
+            Instr.Add("eq", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1200));
+            Instr.Add("neq", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1300));
+            Instr.Add("leu", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1400));
+            Instr.Add("lequ", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1500));
+            //logical and/or/xor
+            Instr.Add("land", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1800));
+            Instr.Add("lor", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1900));
+            Instr.Add("lxor", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x1a00));
+            //bit searching
+            Instr.Add("msb", new Instruction(0x16, true, false, true, false, false, false, false, false, 0x1c00));
+            Instr.Add("lsb", new Instruction(0x16, true, false, true, false, false, false, false, false, 0x1d00));
+            Instr.Add("msbn", new Instruction(0x16, true, false, true, false, false, false, false, false, 0x1e00));
+            Instr.Add("lsbn", new Instruction(0x16, true, false, true, false, false, false, false, false, 0x1f00));
+            //bit setting
+            Instr.Add("sbit", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x2000));
+            Instr.Add("sbitc", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x2100));
+            Instr.Add("gbit", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x2200));
+            Instr.Add("xbit", new Instruction(0x16, true, true, true, false, false, false, false, false, 0x2300));
+            //end extended instruction set
             Instr.Add("cmp", new Instruction(0x17, true, true, true, false, false, false, false, false, 0));
             //0x18 flcmpi
             Instr.Add("sri", new Instruction(0x19, true, true, false, true, false, false, false, false, 0));
@@ -232,10 +255,33 @@ namespace ProgCom
             //0x1d --
             //0x1e extended instruction set, immediate instructions
             //Instr.Add("nop", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0000));
+            //partial moves
             Instr.Add("movb", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0800));
             Instr.Add("movhw", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0900));
             Instr.Add("movbl", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0a00));
             Instr.Add("movhwl", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x0b00));
+            //comparisons
+            Instr.Add("lei", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1000));
+            Instr.Add("leqi", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1100));
+            Instr.Add("eqi", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1200));
+            Instr.Add("neqi", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1300));
+            Instr.Add("leui", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1400));
+            Instr.Add("lequi", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1500));
+            //logical and/or/xor
+            Instr.Add("landi", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1800));
+            Instr.Add("lori", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1900));
+            Instr.Add("lxori", new Instruction(0x1e, true, true, false, true, false, false, false, false, 0x1a00));
+            //bit searching
+            //Instr.Add("msbi", new Instruction(0x1e, true, false, false, true, false, false, false, false, 0x1c00));
+            //Instr.Add("lsbi", new Instruction(0x16, true, false, false, true, false, false, false, false, 0x1d00));
+            //Instr.Add("msbni", new Instruction(0x16, true, false, false, true, false, false, false, false, 0x1e00));
+            //Instr.Add("lsbni", new Instruction(0x16, true, false, false, true, false, false, false, false, 0x1f00));
+            //bit setting
+            Instr.Add("sbiti", new Instruction(0x16, true, true, false, true, false, false, false, false, 0x2000));
+            Instr.Add("sbitci", new Instruction(0x16, true, true, false, true, false, false, false, false, 0x2100));
+            Instr.Add("gbiti", new Instruction(0x16, true, true, false, true, false, false, false, false, 0x2200));
+            Instr.Add("xbiti", new Instruction(0x16, true, true, false, true, false, false, false, false, 0x2300));
+            //end extended instruction set immediate
             //0x1f cmpi
 
             /****************************************************************************************/

@@ -41,7 +41,7 @@ namespace ProgCom
                 Tuple<UInt16, int> segment = hw.getSegment(i);
                 for (int j = 0; j < segment.Item2; ++j) {
                     if (deviceMap[j + segment.Item1] != null) {
-                        throw new ArgumentException("Intersecting segments are not allowed");
+                        throw new ArgumentException("Intersecting segments are not allowed; collision between " + deviceMap[j + segment.Item1].GetType().ToString() + " and " + hw.GetType().ToString());
                     } else {
                         deviceMap[j + segment.Item1] = hw;
                     }

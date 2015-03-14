@@ -109,22 +109,24 @@ public class Program {
 		
 		//up next;
 		//#asminclude
-		
+		//when returning from a function, don't save variables that are not going to be used
+		//see if it is possible to remove some really dumb register assignments afterwards:
+		//		movi	r1, string14
+		//		mov		r2, r1 <- this could be removed
+		//		rd		r1, fp, 0 <- this makes that clear
+		//		call	findKeyword
 		
 		//NEED:
-		// when available, arithmetical right shift, >>>
+		// arithmetical right shift, >>>
 		// specify strings and addresses in global variables
 		
 		//WANT:
 		// volatile <- put in asmgen somewhere. will have to wait for emulator rewrite(?)
 		// figure out some way of storing the type in function pointers
 		// _ will ignore function returns/parameters, is "invalid" variable name, make sure that this is not usable elsewhere
-		// optimise assignments, currently seems to use 2 instructions where 1 would suffice sometimes
-		// optimisation: an if statement followed by break/continue where the state need not be restored should be merged into one instruction
-		// optimisation: create a proper (optimal) recursive function for state restore
-		// optimise post decrements, currently mov addi, could be reduced to single addi but requires a certain effort to implement
 		// optimisation: tail recursion
 		// optimisation: in loops where a function call is used, move some variables to higher registers so restore is not needed
+		// make it possible to use character literals
 		
 		//I'm too lazy too look up what the correct thing to check for is
 		if(args == null || args.length == 0) {
@@ -413,13 +415,18 @@ public class Program {
 		gen.comment(var+t.value);
 		
 		if(t.value.equals("++")) {
-			//make copy, set copy on variabestack, increment
 			gen.increment(var);
 			//System.out.println("incremented " + var);
 		} else if(t.value.equals("--")) {
-			//make copy, set copy on variabestack, decrement
 			gen.decrement(var);
-		} else throw new InternalCompilerException("Why was this in aritm_d?: " + t.value + " at line " + t.line);
+		} else if(t.value.equals("(-)")) {
+			String tmp = var;//I cannot be arsed to optimise this at the moment, make sure temporary variables get reused here at some point
+			var = getTemporaryVar(types.getVar(var).type);
+			gen.negate(var, tmp, types.getVar(tmp).type);
+			freeTmpVar(tmp);
+		} else {
+			throw new InternalCompilerException("Why was this in aritm_d?: " + t.value + " at line " + t.line);
+		}
 		
 		variableStack.push(var);
 		return aritm();
@@ -567,6 +574,9 @@ public class Program {
 				t2 = peek();
 				if(t2.type.equals("operator") && t2.value.equals("=")) {
 					next();
+					if(!dest.equals(var1) && !dest.equals(var2)) {
+						freeTmpVar(dest);//since we get a new variable, we must free any temporary variables from the stack
+					}
 					dest = variableStack.pop();
 				} else if(dest.startsWith("__TMP")) {
 					//reallocate the temporary thing to right
@@ -687,6 +697,9 @@ public class Program {
 				t2 = peek();
 				if(t2.type.equals("operator") && t2.value.equals("=")) {
 					next();
+					if(!dest.equals(var1)) {
+						freeTmpVar(dest);
+					}
 					dest = variableStack.pop();
 				} else if(dest.startsWith("__TMP")) {
 					//reallocate the temporary thing to right
@@ -1152,16 +1165,32 @@ public class Program {
 			vars.addLast(paramNames.removeLast());
 		}
 		
-		//arrange the parameteres for the function
-		gen.arrange(vars, true);
+		t = peek();
+		LinkedList<String> exceptions = new LinkedList<String>();//get a list of the variables that are to be excepted from being stored, namely those that are going to be assigned to
+		if( t.type.equals("operator") && t.value.equals("=") ) {
+			if(f.returnTypes.size() > variableStack.size()) {
+				throw new SyntaxErrorException("There are not enough variables on the stack to assign from function call " + f.name +  " at line " + t.line);
+			}
+			for(int i = 0; i < f.returnTypes.size(); ++i) {
+				exceptions.addFirst(variableStack.pop());
+			}
+			for(String s : exceptions) {
+				//System.out.println("DIDn't save " + s + " at line " + t.line);
+				variableStack.push(s);
+			}
+		}
+		
+		//arrange the parameters for the function
+		gen.arrange(vars, true, exceptions);//exceptions is the variables we do not need to store since they are part of the return values
 		//make sure temporary variables are deallocated
 		for(String s : vars) {
 			freeTmpVar(s);
 		}
-		gen.clearVars();
+		
+		gen.clearVars(exceptions);
 		if(f.name.equals("__functionpointer")) {
-			gen.functionPointerCall(fname);
-		} else gen.functionCall(fname);
+			gen.functionPointerCall(fname, q);
+		} else gen.functionCall(fname, q);
 		
 		t = peek();
 		if(t.type.equals("operator") && t.value.equals("=")) {
@@ -1180,7 +1209,7 @@ public class Program {
 				vars.addFirst(s);
 			}
 			//arrange the next variables to the stuff
-			gen.arrange(vars, false);
+			gen.arrange(vars, false, new LinkedList<String>());
 			//make sure we didn't assign anything to a temporary variable
 			for(String s : variableStack) {
 				if(s.startsWith("__TMP")) throw new SyntaxErrorException("Temporary values may not be assigned to in function calls: " + s + " at line " + t.line);
@@ -1212,7 +1241,7 @@ public class Program {
 			throw new SyntaxErrorException("Type missmatch in function return from \"" + fname + "\" at line " + t.line);
 		}
 		
-		gen.arrange(someList, false);
+		gen.arrange(someList, false, new LinkedList<String>());
 		variableStack.push(dest);
 		
 		return aritm();
@@ -1824,7 +1853,7 @@ public class Program {
 		//if loop contains a function call, unload all variables
 		int itmp = iterator;
 		if(nextStatementHasFCall() || nextStatementHasFCall()) {//we check both in boolean statement and in the looped statement
-			gen.clearVars();
+			gen.clearVars(new LinkedList<String>());
 		} else if(gen.varCount() >= 12) {
 			gen.storeVars();
 		}
@@ -1897,9 +1926,9 @@ public class Program {
 			varsRev.addFirst(s);
 		}
 		purgeStack();//free all values on the variable stack
-		gen.arrange(varsRev,true);
+		gen.arrange(varsRev,true, new LinkedList<String>());
 		//forget register layout
-		gen.clearVars();//the recently arranged registers should be marked unaltered or something
+		gen.clearVars(new LinkedList<String>());//the recently arranged registers should be marked unaltered or something
 		//inline the assembler code
 		t = next();
 		gen.comment("---BEGIN INLINE ASSEMBLER---");
@@ -1915,10 +1944,10 @@ public class Program {
 		LinkedList<String> varList = new LinkedList<String>();
 		while(!end()) {
 			t = next();
-			if(!t.type.equals("identifier")) throw new SyntaxErrorException("After string in asm there needs to be a list of variables or a ;, got: " + t.value + " at line " +t.line);
+			if(!t.type.equals("identifier")) throw new SyntaxErrorException("After the list of strings in asm there needs to be a list of variables or a ;, got: " + t.value + " at line " +t.line);
 			else varList.addLast(t.value);
 		}
-		gen.arrange(varList, false);
+		gen.arrange(varList, false, new LinkedList<String>());
 		return true;
 	}
 	
@@ -1953,9 +1982,9 @@ public class Program {
 		//arrange all variables in proper order in registers
 		//variable 1 in r1, 2 in r2 etc.
 		gen.storeAllGlobals();
-		gen.arrange(tmpList, true);
+		gen.arrange(tmpList, true, new LinkedList<String>());
 		
-		gen.functionReturn();
+		gen.functionReturn(returnTypes.size());
 		if(!codeIsDead()) startDeadCode();
 		
 		//empty variable stack

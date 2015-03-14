@@ -111,15 +111,15 @@ opcode		addr. field	instruction name	cycles	rA	rB	address/const/rC	pc-relative
 0x31		--		--			--	--	--	--
 0x32		--		--			--	--	--	--
 0x33		--		--			--	--	--	--
-0x34		--		push			1-17**	no	no	rC			no
-0x35		--		pop			1-17**	yes	no	no			no
+0x34		--		push			1-7**	no	no	rC			no
+0x35		--		pop			1-8**	yes	no	no			no
 0x36		--		--			--	--	--	--
 0x37		--		int			2	no	no	rC			--
 0x38		--		movi			1	no	no	const/address
 0x38		--		movil			1	no	no	const/address
 0x39		--		movhi			1	no	no	const/address
-0x3a		--		rd			1-17**	yes	yes	const/address		no
-0x3b		--		wr			1-17**	yes	yes	const/address		no
+0x3a		--		rd			1-8**	yes	yes	const/address		no
+0x3b		--		wr			1-7**	yes	yes	const/address		no
 0x3c		--		--			--	--	--	--
 0x3d		--		--			--	--	--	--
 0x3e		--		--			--	--	--	--			
@@ -127,7 +127,7 @@ opcode		addr. field	instruction name	cycles	rA	rB	address/const/rC	pc-relative
 
 
 *	all conditional branch instructions take two cycles if the branch is taken, one if it isn't
-**	all memory accesses take one cycle if the memory location is cached, 16 otherwise (2 * row size (8) ). If the address is uncacheable, for example if there is hardware present, the access takes 2-5 cycles. If the value of a memory read is used next instruction there is an additional one-cycle delay.
+**	all memory accesses take one cycle if the memory location is cached, 7 otherwise. If the address is uncacheable, for example if there is hardware mapped to the same cache line, the access takes 4-7 cycles. If the value of a memory read is used next instruction there is an additional one-cycle delay.
 ***	The CPU always take 1 cycle to execute the instructions except for when using fpush and fpop, when it has to wait for the FPU to finish operations.
 ****	Both stacks have to complete their operations before this instruction can execute. Thus, after this instruction has run, both stacks will be busy for max(floatStack0BusyCycles,floatStack1BusyCycles) +2 cycles
 

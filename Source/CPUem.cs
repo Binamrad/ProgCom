@@ -85,6 +85,7 @@ namespace ProgCom
         private const int exreg = 29;
         private IntStatus interruptStatus;
         //to add: msb, lsb, msbn, lsbn (most significant bit, least significant bit, most significant bit number (eg bit 23), least significant bit number)
+        //to add: le lei leu leui leq leqi lequ lequi eq eqi equ equi neq neqi nequ nequi land landi lor lori lxor lxori
         //to add: fl, flr (I have completely forgotten what these mean)
 
         int[] fsp;//float stack pointer
@@ -582,9 +583,11 @@ namespace ProgCom
                 valC = valC & 255;
             }
             int extraExecTime = 0;
+            int tmp;
             switch (inst) {
                 case 0://true nop
                     break;
+                //8-11 partial moves
                 case 8://movb
                     valA ^= (valA & (255 << (8 * (valC & 3))));
                     register[regA] = valA | (valB & (255 << (8 * (valC & 3))));
@@ -601,7 +604,115 @@ namespace ProgCom
                     valA ^= (valA & (65535 << (16 * (valC & 1))));
                     register[regA] = valA | ((valB & 65535) << (16 * (valC & 1)));
                     break;
-                default://toAdd: replace value
+                //12-15, might extend partial moves here
+                //16-24, comparison instructions
+                case 16://le
+                    if(valB < valC) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                case 17://leq
+                    if(valB <= valC) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                case 18://eq
+                    if(valB == valC) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                case 19://neq
+                    if(valB != valC) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                case 20://leu
+                    if ((UInt32)valB < (UInt32)valC) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                case 21://lequ
+                    if ((UInt32)valB <= (UInt32)valC) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                //22-24, reserved
+                //24-27, logical arithmetic
+                case 24://land
+                    if (valB != 0 && valC != 0) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                case 25://lor
+                    if (valB != 0 || valC != 0) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                case 26://lxor
+                    if ((valB != 0 && valC == 0) || (valB == 0 && valC != 0)) {
+                        register[regA] = 1;
+                    } else {
+                        register[regA] = 0;
+                    }
+                    break;
+                //27, reserved
+                //28-31, bit searching
+                case 28://msb
+                    tmp = 31;
+                    while (((valC >> tmp) & 1) == 0 && tmp > 0) {
+                        tmp--;
+                    }
+                    register[regA] = 1 << tmp;
+                    break;
+                case 29://lsb
+                    tmp = valC - 1;
+                    tmp = tmp ^ valC;
+                    register[regA] = tmp;
+                    break;
+                case 30://msbn
+                    tmp = 31;
+                    while (((valC >> tmp) & 1) == 0 && tmp > 0) {
+                        tmp--;
+                    }
+                    register[regA] = tmp;
+                    break;
+                case 31://lsbn
+                    tmp = 0;
+                    while (((valC >> tmp) & 1) == 0 && tmp < 31) {
+                        tmp++;
+                    }
+                    register[regA] = tmp;
+                    break;
+                //32-35, bit twiddling
+                case 32://sbit, set bit
+                    register[regA] = valB | (1 << (valC & 0x1f));
+                    break;
+                case 33://sbitc, set bit conditional
+                    register[regA] = valB != 0 ? valA | (1 << (valC & 0x1f)) : valA;
+                    break;
+                case 34://gbit, get bit
+                    register[regA] = (Int32)((UInt32)(valB & (1 << (valC & 0x1f)))) >> (valC &0x1f);
+                    break;
+                case 35://xbit, xor bit
+                    register[regA] = valB ^ (1 << (valC & 0x1f));
+                    break;
+                default:
                     spawnException(258);
                     return 0;
             }
@@ -681,14 +792,13 @@ namespace ProgCom
                 hardware.AddLast(hw);
             }
             catch (Exception e) {
-                hasErrors = true;
-                errorMessages.AddLast(e.Message);
                 //memory.hwDisconnect(hw);//implement, pronto
                 hardware.Remove(hw);
                 try {
                     hw.disconnect();
                 }
                 catch { }
+                throw e;
             }
         }
 

@@ -36,7 +36,10 @@ namespace ProgCom
                     sending = false;
                     bitSend = 0;
                     memarea[0] = charSend;
-                    memarea[1] = 1;
+                    memarea[1] |= 1;
+                    if ((memarea[1] & 2) != 0) {
+                        inth.interrupt(262);
+                    }
                 }
                 --c;
             }

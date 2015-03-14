@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using KSP.IO;
+using UnityEngine;
 
 namespace ProgCom
 {
@@ -21,7 +22,7 @@ namespace ProgCom
     //2: "read only" mode if not 0
     //3: data begins here
 
-    public class TapeDrive : PartModule, IPCHardware
+    public class TapeDrive : PartModule, IPCHardware, PCGUIListener
     {
         //this should probably be done with an enum
         private const int IBF = 0;      //input buffer full
@@ -194,6 +195,8 @@ namespace ProgCom
             }
         }
 
+        //************************************************************
+        //create various exceptions
         private void unrecognisedCommandException()
         {
             memarea[3] = 1;
@@ -217,8 +220,28 @@ namespace ProgCom
             memarea[3] = 2;
         }
 
+        //called if the tape was ejected while we were doing something
+        private void tapeEjectedException()
+        {
+            memarea[3] = 5;
+        }
+        //**************************************************************
+        public override void OnStart(PartModule.StartState state)
+        {
+            base.OnStart(state);
+            if (state.Equals(PartModule.StartState.Editor)) return;//don't start stuff in the editor
+            windowPos = new Rect();
+            if ((windowPos.x == 0) && (windowPos.y == 0))//windowPos is used to position the GUI window, lets set it in the center of the screen
+            {
+                windowPos = new Rect(Screen.width / 2, Screen.height / 2, 100, 100);
+            }
+            RenderingManager.AddToPostDrawQueue(3, new Callback(draw));
+        }
+
+
+
         //this should be done in-tape
-        public void insertMedia(Int32[] tape)//make this private, and make loadTape call this function
+        private void insertMedia(Int32[] tape)//make this private, and make loadTape call this function
         {
             if (tape == null || tape.Length != 256 * 1024) throw new ArgumentException("Incorrect parameters passed to tape drive at tape initialisation");
             this.tape = tape;
@@ -279,9 +302,10 @@ namespace ProgCom
 
         public void tick(int ticks)
         {
-            handleSendRec();//send/receive stuff from the connected cpu
-            performRWS(ticks);//read/write/seek if appropriate
-            
+            if (memarea[3] == 0) {
+                handleSendRec();//send/receive stuff from the connected cpu
+                performRWS(ticks);//read/write/seek if appropriate
+            }
             //if there is data in the interrupt section, interrupt
             if (memarea[3] != 0 && getStatus(IE)) {
                 inth.interrupt(ERRORINTERRUPT);
@@ -388,13 +412,144 @@ namespace ProgCom
         }
 
         //************************************************
+        //gui functionality
+        GUIStates guis = new GUIStates();
+        public void recGUIState(GUIStates g)
+        {
+            guis = g;
+        }
+
+
+        protected Rect windowPos;
+        int windowID = Util.random();
+        public void draw()
+        {
+            if (guis.tap) {
+                GUI.skin = HighLogic.Skin;
+                windowPos = GUILayout.Window(windowID, windowPos, windowGUI, "Tape Drive", GUILayout.MinWidth(256));
+            }
+        }
+
+        //handles how the window looks
+        String tapeName = null;
+        String newTapeName = "";
+        private void windowGUI(int windowID)
+        {
+            //normal gui style
+            GUIStyle mySty = new GUIStyle(GUI.skin.button);
+            mySty.normal.textColor = mySty.focused.textColor = Color.white;
+            mySty.hover.textColor = mySty.active.textColor = Color.yellow;
+            mySty.onNormal.textColor = mySty.onFocused.textColor = mySty.onHover.textColor = mySty.onActive.textColor = Color.green;
+            mySty.padding = new RectOffset(8, 8, 8, 8);
+
+            /*************************************************************************************************************/
+            GUILayout.BeginVertical();
+            GUILayout.BeginHorizontal();
+            GUILayout.TextField(tapeName == null ? "No tape inserted" : "Current tape: " + tapeName, GUILayout.MinWidth(60.0F)); //you can play with the width of the text box
+            
+            if (GUILayout.Button("eject", mySty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            {
+                tapeName = null;
+                readable = false;
+                writeable = false;
+                tape = null;
+                //null out the tape
+                //throw an exception if there was something going on
+                if (toRead > 0 || toWrite > 0 || recToWrite > 0 || seeking || readCache.Count > 0 || writeCache.Count > 0) {
+                    tapeEjectedException();
+                }
+                toRead = 0;
+                toWrite = 0;
+                recToWrite = 0;
+                seeking = false;
+                reading = false;
+                writing = false;
+                seekTarget = 0;
+                pointer = 0;
+                //flush the buffers
+                readCache.Clear();
+                writeCache.Clear();
+            }
+
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+
+            //FILE NAME INPUT BOX
+            if (Event.current.type == EventType.KeyDown) {
+                if (Event.current.keyCode == KeyCode.Return) {
+                    Event.current.Use();
+                    if (tape == null) {
+                        try {
+                            tapeName = newTapeName;
+                            loadTape(tapeName);
+                        }
+                        catch (Exception) {
+
+                        }
+                    }
+                }
+            }
+            newTapeName = GUILayout.TextField(newTapeName, GUILayout.MinWidth(60.0F)); //you can play with the width of the text box
+
+            if (GUILayout.Button("load", mySty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            {
+                if (tape == null) {
+                    //load a tape from memory
+                    try {
+                        insertMedia(loadTape(newTapeName));
+                        tapeName = newTapeName;
+                    }
+                    catch (FormatException) {
+                        print("not a data tape");
+                    }
+                    catch (Exception) {
+                        print("file not found");
+                    }
+                }
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+
+            //VARIOUS FUNCTION BUTTONS
+            if (GUILayout.Button("rename", mySty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            {
+                if (tape != null) {
+                    tapeName = newTapeName;
+                }
+            }
+
+            if (GUILayout.Button("save", mySty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            {
+                if (tape != null) {
+                    //store the tape inserted with the current tapeName
+                    saveTapeInternal(tapeName);
+                }
+            }
+
+            if (GUILayout.Button("new", mySty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            {
+                if (tape == null) {
+                    newTapeName = "empty.pct";
+                    tapeName = "empty.pct";
+                    Int32[] media = new Int32[256 * 1024];
+                    media[1] = 4711;
+                    insertMedia(media);
+                }
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();//I/O area
+            GUI.DragWindow(new Rect(0, 0, 10000, 20));
+        }
+
+        //************************************************
         //external stuff
         //replace this once we get a gui for the tape drive
-        public void saveTapeInternal(String name)
+        private void saveTapeInternal(String name)
         {
             saveTape(name, tape);
         }
-        public void saveTape(String name, Int32[] tape)
+        public static void saveTape(String name, Int32[] tape)
         {
             //find the file and load it. Return false if it does not exist
             //this function will call insertMedia to do the final stuff with the stuff
@@ -409,11 +564,7 @@ namespace ProgCom
             }
             t.Close();
         }
-        public string statusString()
-        {
-            return "p: " + pointer + " tp: " + tape[pointer >= tape.Length ? tape.Length - 1 : pointer] + " wc: " + writeCache.Count + " rc: " + readCache.Count + " read " + reading + " write " + writing + " seek " + seeking + "\ntrd: " + toRead + " twr: " + toWrite + " seekto: " + seekTarget + " lr: " + lastRec + " lra: " + lastRecA + " lcmd: " + lastCommand + " lh3: " + lasth8; 
-        }
-        public Int32[] loadTape(String name)
+        private Int32[] loadTape(String name)
         {
             //find the file and load it. Return false if it does not exist
             //this function will call insertMedia to do the final stuff with the stuff

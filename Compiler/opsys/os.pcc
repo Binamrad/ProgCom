@@ -1,0 +1,1103 @@
+//main thread of operating system
+//also some higher-level io functions, such as tape drive stuff
+//we need the os libraries
+
+//#include oslibs.pcc
+//should we include osasm.asm aswell and get a single file? probably best to do so
+
+//TODO:
+//when writing to a file, make sure file is not cut off <- done
+//have a cut off function for files
+//when starting a new program, make sure that the stack pointer used by the os is not lost <- done
+//when starting a new thread, make sure that it gets a stack pointer that makes sense
+
+//software that needs designing
+//text editor <- separate, delay
+//text display <- separate, delay
+//scripting system <- semi-done
+//navigation thing <- separate, delay
+//file copy thing, included <- semi-done
+//file delete thing <- must do
+//file size function <- must do
+//file cut function <- must do
+
+
+//test all software
+
+
+def osmain : {
+	//register additional interrupt handlers
+	128 os_mutex_aq@ (func0) interruptRegister $;
+	129 os_mutex_drop@ (func0) interruptRegister $;
+	
+	//register the tape interrupt handlers
+	10 os_tape_read@ (func0) interruptRegister $;
+	11 os_tape_write@ (func0) interruptRegister $;
+	12 os_tape_readfile@ (func0) interruptRegister $;
+	13 os_tape_writefile@ (func0) interruptRegister $;
+	14 openfile@ (func0) interruptRegister $;
+	15 os_create_file@ (func0) interruptRegister $;
+
+	//clear the screen
+	0 setbgcol $;
+	1 setfgcol $;
+	//0 (char) fill $;
+
+	//print some friendly messages to the screen
+	"PC-OS version 0.1\n\r" prints $;
+	
+	char# stringbuffer;
+	stringbuffer 32 salloc $ (char#) =;
+	int strpointer;
+	strpointer 0 =;
+
+
+	int running;
+	running 1 =;
+	while running; {//repeatedly call readStr and parse the input here
+		//read input here
+		func1 program;
+		program 0 =;
+		stringbuffer(int#) 32 0 arrset$;
+		"Ready\n\r" prints $;
+
+		stringbuffer 32 reads$;
+		if stringbuffer "halt" 32 strcmp$ ; {
+			running 0 =;
+			"goodbye" prints$;
+		} else if stringbuffer "clear" 32 strcmp$ ; {
+			int i;
+			i 0 =;
+			while i 32 <; {
+				scroll_screen$;
+				i++;
+			}
+		} else if stringbuffer "reboot" 32 strcmp$ ; {
+			"rebooting..." prints$;
+			reboot$;
+		} else if stringbuffer "format" 32 strcmp$; {
+			format$;
+		} else if stringbuffer "list" 32 strcmp$; {
+			list$;
+		} else if stringbuffer "copy" 32 strcmp$; {
+			fileCopy$;
+		} else {
+			program stringbuffer load_program$=;
+			if program 0 != ;{
+				asm;//make sure that the stack pointer is not lost
+				".data"
+				"__OSTMPSPSTORE:"
+				"0"
+				".text"
+				"wr	sp, r0, __OSTMPSPSTORE";;
+				stringbuffer program$;
+				asm;
+				"rd	sp, r0, __OSTMPSPSTORE";;
+			}
+		}
+	}
+	return;
+}
+
+//************************************************************************************************
+//****************os primary functions************************************************************
+//************************************************************************************************
+
+//loads a program into the proper position in memory and executes it
+def load_program char# input: func1 {
+	//when the player enters input in the console this is the function that is called
+	//allocate maximum neccessary area
+	char# programName;
+	programName 12 salloc$(char#)=;
+	programName(int#) 12 0 arrset$;
+
+	//read string until the first space and copy to new thing
+	//if longer than 12 characters, print error message
+	int counter;
+	counter 0 =;
+	while input# " "# != input# 0(char) != &; {
+		if counter 12 == ; {
+			"Program name overflow\n\r" prints$;
+			//input prints$;
+			//"\n\r" prints$;
+			return 0(func1);
+		}
+		programName counter+ input# <-;
+		input++;
+		counter++;
+	}
+	if counter 0 ==; {
+		return 0(func1);
+	}
+	//look through the file table and see if there is a file that matches
+	//if there is, read it into memory at the specified position
+	int tapePos;
+	tapePos programName openfile$=;
+	//check that the function did not return null
+	if tapePos 0 ==; {
+		//print error here
+		"No such program:\n\r" prints$;
+		programName prints$;
+		"\n\r" prints$;
+		return 0(func1);
+	}
+	int# farea;
+	int status;
+	farea 2 salloc$=;
+	status tapePos farea 2 tapePos os_tape_readfile$=;
+	
+	int progLen;
+	progLen farea 1+#=;
+	farea farea#(int#)=;
+	
+	if farea 6000 <; {
+		"Cannot open program:\n\rstart index too low\n\r" prints$;
+		return 0(func1);
+	}
+
+	status tapePos farea progLen tapePos os_tape_readfile$=;
+	
+	//make sure we didn't get an EOF error here somewhere
+
+	//start a new thread for the program
+	//farea(func0) startTask$;
+
+	return farea(func1);
+}
+
+//formats the tape in the tape drive
+def format : {
+	//first do a check to see if there is anything on the tape drive
+	//location 7 is file system pointer
+	int tmp;
+	tmp@ 1 7 os_tape_read$;
+	//if it is set prompt user if they want to continue
+	if tmp; {
+		"Tape already formatted\n\r" prints$;
+		"Continue?y/n\n\r" prints$;
+		char c;
+		c readc$=;
+		if c "y"# !=; {
+			return;
+		}
+	}
+	"Formatting...\n\r" prints$;
+	//set location 7 to 8
+	tmp 8=;
+	tmp@ 1 7 os_tape_write$;
+
+	//erase all contents between 8 and 1024
+	tmp 0=;
+	int i;
+	i 8=;
+	while i 1024<; {
+		tmp@ 1 i os_tape_write$;
+		i++;
+	}
+
+	//set lower 1024 words to protected by writing -1 to address 512 and 513
+	tmp 1(-)=;
+	tmp@ 1 512 os_tape_write$
+	tmp@ 1 513 os_tape_write$
+
+	//check if there is any bootable media on the tape
+	tmp@ 1 3 os_tape_read$;
+	//if there is, prompt user if they want to keep it
+	if tmp; {
+		"Bootable program present\n\r" prints$;
+		"Do you want to keep it?y/n\n\r" prints$;
+		c readc$=;
+		if c "n"# ==; {
+			tmp 0=;
+			tmp@ 1 3 os_tape_write$;
+			return;
+		}
+		"Creating boot file...\n\r" prints$;
+
+		//find memory location of bootable media
+		int location;
+		location tmp=;
+
+		//check length of bootable media
+		int len;
+		len@ 1 location 1+ os_tape_read$;
+
+		//write back location and find memory reservation area
+		location@ 1 11 os_tape_write$;
+		location 512 /=;
+		location 512 +=;
+		
+		//find how much memory we should set to protected
+		len len 2+ 512/ =;
+		len++;
+		//set bootable media to protected
+		tmp 1(-)=;
+		while len; {
+			tmp@ 1 location os_tape_write$;
+			len--;
+			location++;
+		}
+		//set file label "boot", file pointer to right area and file type to "continuous" + "executable"
+		tmp "b"# "o"# "o"# "t"# char_pack$=;
+		tmp@ 1 8 os_tape_write$;
+		return;//all done
+	}
+	return;
+}
+
+//prints all files currently on the tape drive
+def list : {
+	char# filename;
+	filename 13 salloc$(char#)=;
+	filename(int#) 13 0 arrset$;
+
+	int# fsname;
+	fsname 4 salloc$=;
+	
+	int index;
+	index 8 =;
+	int lineCounter;
+	lineCounter 0 =;
+	
+	while index 512 <; {
+		//get fileName
+		index fsname 4 index os_tape_read$=;
+		//if first character is not zero, unpack and print
+		if fsname# (char); {
+			int i;
+			i 0 =;
+			while i 3 <; {
+				int tmp;
+				tmp fsname i+# =;
+				filename i 2 <<+ tmp (char) <-;
+				filename i 2 <<+ 1+ tmp 8 >> (char) <-;
+				filename i 2 <<+ 2+ tmp 16 >> (char) <-;
+				filename i 2 <<+ 3+ tmp 24 >> (char) <-;
+				i++;
+			}
+			filename prints$;
+			"\n\r" prints$;
+
+			lineCounter++;
+			if lineCounter 30==; {
+				"Continue?y/n\n\r" prints$;
+				char c;
+				c readc$=;
+				if c "n"#==; {
+					break;
+				}
+				lineCounter 0 =;
+			}
+		}
+	}
+	return;
+	
+}
+
+//copies a file. possibly to another tape.
+def fileCopy : {
+	//allocate space for the filename
+	char# fname;
+	int index;
+	int datlen;
+	fname 13 salloc$(char#)=;
+	20 salloc$;
+	datlen 0 =;
+	//get fileName
+	"Enter filename:\n\r" prints$;
+	fname 13 reads$;
+	//open file
+	index fname openFile$=;
+	if index 0 ==; {
+		"File does not exist\n\r" prints$;
+		return;
+	}
+	//read entire file
+	//how do we do this again?
+	//if the file type is continuous, read the two first numbers to find the things
+	int status;
+	int fileLen;
+	int# farea;
+	status 0 =;
+	fileLen 0 =;
+	farea 0 salloc$=;//just the top of the stack, we'll allocate the rest later
+	if index 24 >> 1 & 0 ==; {
+		status index fileLen@ 1 index readFile$=;
+		status index fileLen@ 1 index readFile$=;
+		status index farea fileLen 2+ index 2- readFile$=;
+	} else {
+		//otherwise we need to read until we hit EOF
+		int #prevPointer;
+		prevPointer farea =;
+		status index farea 14 index readFile$=;
+		while status 0 ==; {
+			farea 14 +=;
+			fileLen 14 +=;
+			status index farea 14 index readFile$=;
+		}
+		fileLen index 15 & 1 - +=;
+	}
+	//wait for user to swap tape
+	"Swap tape, then press any key" prints$;
+	readc$;
+	//get new fileName
+	"Enter filename:\n\r" prints$;
+	fname 13 reads$;
+	//make new file
+	index fname openFile$=;
+	if index 0 ==; {
+		index fname makeFile$=;
+	} else {
+		"File already exists\n\r" prints$;
+		return;
+	}
+	//write data back
+	status index farea fileLen index writeFile$=;
+	
+	return;
+}
+
+
+//************************************************************************************************
+//****************Tape IO functions***************************************************************
+//************************************************************************************************
+
+var int tapemutex = 0;
+var int# tapein = 65;
+var int# tapeout = 64;
+var int# tapestat = 66;
+var int# tapeint = 67;
+
+//---VARIOUS HELPER FUNCTIONS FOR FILE IO---
+
+//returns the length of the 16-word area the tape index is pointing at
+//valid lengths are 0-14
+def get_segment_length int index : int {
+	int tmp2;
+	index index 15 & -= ;
+
+	//read segment index
+	tmp2@ 1 index os_tape_read$;
+	
+	//mask out high byte
+	tmp2 tmp2 24 >> =;
+
+	return tmp2;//tmp2 now contains the ammount of the segment that has been filled
+}
+
+//returns a valid index for the next segment in the file block chain.
+def get_next_segment int index : int {
+	int tmp;
+
+	tmp@ 1 index 15| os_tape_read$;
+
+	return tmp;
+}
+
+//returns a valid index for the previous segment in the file block chain.
+def get_prev_segment int index : int {
+
+	int tmp;
+
+	tmp@ 1 index index 15& - os_tape_read$;
+	
+	tmp tmp 8 << 8 >> =;
+
+	return tmp;
+}
+
+//sets the length of the segment the index is pointing at
+def set_segment_length int index length : {
+
+	int tmp2;
+	index index 15 & -= ;
+
+	//read segment index, modify it and write back
+	tmp2@ 1 index os_tape_read$;
+	
+	//mask out high byte and replace with new value
+	tmp2 tmp2 8 << 8 >> =;
+	tmp2 length 24 << |=;
+	tmp2@ 1 index os_tape_write$;
+
+	return;
+}
+
+
+//reads up to 14 words of data from the current segment
+//returns error code, new index. non-zero means an error has occured and the operation was not attempted/completed
+def read_segment_data int index length int# buffer : int int {
+	//make sure we don't overwrite the first word
+	int tmp tmp2;
+	tmp index get_segment_length$=;
+	tmp2 14 index 15& 1- - =;
+	
+	if tmp tmp2 1- <; {
+		//error condition, we are trying to write after the end of the file
+	}
+
+	if length tmp2 >; {
+		//error condition, data won't fit in segment
+	}
+
+	index buffer length index os_tape_read$=;
+
+	return 0 index;
+}
+
+//writes up to 14 words of data from the current segment
+//returns error code. non-zero means an error has occured and the operation was not attempted/completed
+def write_segment_data int index length int# buffer : int int {
+	//make sure we don't overwrite the first word
+	int tmp;
+	tmp index 15& =;
+	if tmp 0 ==; {
+		index++;
+		tmp 1 =;
+	}
+	//chack that we can write enough data to the segment
+	tmp index remaining_segment_data$ =;
+	
+	if length tmp >; {
+		return 1 index; 
+	}
+	
+	//write data
+	index buffer length index os_tape_write$=;
+
+	
+	return 0 index;
+}
+
+//returns how much data is writeable in one segment
+def remaining_segment_data int index : int {
+	index index 15 & =;
+	int result;
+	if index 0 ==; {
+		result 14 =;
+	} else {
+		index 1 -=;
+		if index 14 ==; {
+			result 0 =;
+		} else {
+			result 14 index - =;
+		}
+		
+	}
+
+	return result;
+}
+
+//---END HELPER FUNCTIONS---
+
+
+//reads the file table from the tape and returns the pointer to the start of the file
+def openfile char# filename : int {
+	int tapePos;
+	tapePos 8 =;	
+
+	int nameOffset;
+	nameOffset 0 =;
+	
+	int fileOffset;
+	fileOffset 0 =;
+	
+	int# farea;
+	farea 4 salloc$=;
+	
+	while tapePos 512 <; {
+		tapePos farea 4 tapePos os_tape_read$=;
+		//the file names are stored 4/chars per word.
+		//compare each character in the name we are looking for with the names we just read
+		while fileOffset 3 <; {//3*4 = 12, last integer is file index
+			char fchar;//current file character
+			char nchar;//current name character
+			int fileInt;
+			fileInt farea fileOffset+#=;
+
+			fchar fileInt(char) =;
+			nchar filename nameOffset+# =;
+			if fchar nchar !=; {
+				break;
+			} else if nchar 0 == ; {
+				return farea 3+#;
+			}
+			nameOffset++;
+
+			fchar fileInt 8 >>(char) =;
+			nchar filename nameOffset+# =;
+			if fchar nchar !=; {
+				break;
+			} else if nchar 0 == ; {
+				return farea 3+#;
+			}
+			nameOffset++;
+
+			fchar fileInt 16 >>(char) =;
+			nchar filename nameOffset+# =;
+			if fchar nchar !=; {
+				break;
+			} else if nchar 0 == ; {
+				return farea 3+#;
+			}
+			nameOffset++;
+
+			fchar fileInt 24 >>(char) =;
+			nchar filename nameOffset+# =;
+			if fchar nchar !=; {
+				break;
+			} else if nchar 0 == fileOffset 2 == |; {
+				return farea 3+#;
+			}
+			fileOffset++;
+			nameOffset++;
+		}
+		fileOffset 0 =;
+		nameOffset 0 =;
+	}
+
+	return 0;
+}
+
+def os_tape_read int# buffer int length index : int {
+	tapemutex@ mutexAquire $;
+	index seek $;
+	
+	int i;
+	i 0 =;
+	while i length <; {
+		buffer os_tape_readword$ <-;
+		i++;
+		buffer++;
+	}
+
+	tapemutex@ mutexRelease $;
+	return index i +;
+}
+
+def os_tape_write int# data int length index : int {
+	tapemutex@ mutexAquire $;
+	index seek $;
+
+	int i;
+	i 0 =;
+	while i length <; {
+		data# os_tape_writeword $;
+		i++;
+		data++;
+	}
+
+	tapemutex@ mutexRelease $;
+	return index i +;
+}
+
+
+//TODO: should return a "status" integer, and set it to one of the following values:
+//0: no error
+//1: end of file
+//2: invalid file pointer
+
+var int FILE_NOERR = 0;
+var int FILE_EOF = 1;
+var int FILE_IFP = 2;
+
+
+//reads 'length' ammount of words from a file specified by 'index' and puts it in the buffer
+//file format:	16 word segments
+//		first word points to previous entry in linked list of similar segments
+//		next 14 words are data
+//		last word denotes next entry in the list
+//when using this function the file format does not need to be taken into account
+//returns an error code and the new index, in that order
+def os_tape_readfile int# buffer int length index : int int {
+	int errCode;
+	errCode FILE_NOERR =;
+	//check high 8 bits of index for file format
+	//if zero, go to os_tape_read
+	int fileType;
+	fileType index 24 >> =;
+	if fileType 1 & 0 ==; {
+		return FILE_NOERR buffer length index os_tape_read$;
+	}
+	index 16777215 &=;
+	if index 0 ==; {//this is error condition 2
+		return FILE_IFP index fileType 24 << |;
+	}
+
+	int# tapeOut;
+	tapeOut 14 salloc$ =;
+
+	//find our position in the current segment
+	int tmp;
+	int dummy;
+	int currentLoc;
+	currentLoc index 15 & =;
+	if currentLoc 0 ==; {
+		index tmp@ 1 index os_tape_read$=;
+		
+		currentLoc 1 =;
+	} else if currentLoc 15 ==; {
+		//jump to next segment
+		dummy@ 1 index os_tape_read$;
+		if dummy 0 ==; {
+			return FILE_EOF index fileType 24 << |;
+		}
+		currentLoc 1 =;
+		index dummy =;
+		index tmp@ 1 index os_tape_read$=;
+	} else {
+		tmp@ 1 index currentLoc- os_tape_read$;
+	}
+
+	tmp tmp 24 >> =;
+	//read the first segment
+	int toRead;
+	toRead 15 currentLoc - =;
+	if toRead length >; { 
+		toRead length =;
+	}
+	if tmp 14 < toRead tmp > &; {
+		toRead tmp =;
+		length toRead =;
+		errCode FILE_EOF =;
+	}
+	index buffer toRead index os_tape_read$ =;
+	buffer toRead +=;
+	length toRead -=;
+
+	//read all other segments
+	while length; {
+		//jump to next segment
+		dummy@ 1 index get_next_segment$;
+		//check for eof
+		if dummy 0 ==; {
+			errCode FILE_EOF =;
+			break;
+		}
+		
+		index dummy =;
+		tmp index get_segment_length$=;
+
+		//read chunk
+		toRead 14=;
+		if toRead length >; {
+			toRead length =;
+		}
+		if tmp 14 < toRead tmp > &; {
+			toRead tmp =;
+			length toRead =;
+			errCode FILE_EOF =;
+		}
+
+		errCode index buffer toRead index read_segment_data$=;
+
+		//memcp tapeOut buffer toRead memcpy$;
+		buffer toRead +=;
+		length toRead -=;
+	}	
+
+	return errCode index fileType 24 << |;
+}
+
+def os_tape_writefile int# data int length index : int int {
+	int fileType;
+	int errors;
+	errors FILE_NOERR =;
+	
+	//check what kind of file we are writing to, and make sure we do things properly
+	fileType index 24 >> =;
+	if fileType 1 & 0 ==; {
+		return errors data length index os_tape_write$;
+	}
+	index 16777215 &=;
+	if index 0 ==; {//this is an error condition, make sure it is reported somewhere
+		return FILE_IFP index fileType 24 << |;
+	}
+
+	//find out how long we can write in the current segment
+	int toWrite;
+	toWrite 15 index 15& - =;
+	if toWrite 15 ==; {
+		toWrite 14 =;
+		index++;
+	}
+	if toWrite length >; {
+		toWrite length =;
+	}
+	
+	
+	//write that much
+	index data toWrite index os_tape_write$=;
+	length toWrite -=;
+	data toWrite +=;
+
+	//update the counter of how much of the section is filled
+	int fillsize tmp tmp2;
+	tmp index index 15 & - = ;
+	//read previous index, modify it and write back
+	tmp2@ 1 tmp os_tape_read$;
+	fillsize tmp2 24 >> =;
+	fillsize toWrite +=;
+	//mask out high byte and replace with new value
+	tmp2 tmp2 8 << 8 >> =;
+	tmp2 fillsize 24 << |=;
+	tmp2@ 1 tmp os_tape_write$;
+
+	//if we still need to write, enter loop:
+	while length; {
+		//get next index and make sure it is valid
+		int newIndex;
+		newIndex@ 1 index os_tape_read$;
+		//if next pointer is invalid, allocate one segment and add to segment chain
+		if newIndex 0 ==; {
+			newIndex 1 os_tape_allocate$=;
+			newIndex@ 1 index os_tape_write$;
+			index 15 -=;
+			index@ 1 newIndex os_tape_write$;
+		}
+		index newIndex=;
+		//update counter of how many words are written in the segment
+		//read previous index, modify it and write back
+		tmp2@ 1 index os_tape_read$;
+		//mask out high byte, replace with how much of segment is filled
+		tmp tmp2 24 >> =;
+		tmp2 tmp2 8 << 8 >> =;
+
+		//how much should we write?
+		toWrite 14=;
+		if toWrite length >; {
+			toWrite length =;
+		}
+
+		//make sure this is reflected in the file
+		if toWrite tmp >; {
+			tmp2 toWrite 24 << |=;
+		} else {
+			tmp2 tmp 24 << |=;
+		}
+		index tmp2@ 1 index os_tape_write$=;
+		
+		index data toWrite index os_tape_write$=;
+		length toWrite -=;
+		data toWrite +=;
+
+	}
+	return errors index fileType 24 << |;
+}
+
+def os_tape_allocate int segments : int {
+	int i;
+	int tmp;
+	if segments 0 ==; {
+		return 0;
+	}
+	if segments 1 ==; {
+		//perform form fitting allocation
+		i 512 =;
+		while i 1024 <; {
+			i tmp@ 1 i os_tape_read$ =;
+			if tmp 1(-) !=; {
+				tmp 1(-) ^=;
+				int tmp2;
+				tmp2 tmp 1- =;
+				tmp2 tmp &=;
+				tmp2 tmp ^=;//and now we have found the lowest zero in tmp :D
+				tmp 1(-) ^=;
+				tmp tmp2 |=;//and now the lowest zero is a one
+
+				//get the address of the block we allocated
+				tmp2 tmp2 bitnum$ =;
+				tmp2 tmp2 16 * i 512- 512* + =;
+
+				//write back block tmp
+				tmp@ 1 i 1- os_tape_write$;
+				return tmp2;
+			}
+		}
+		return 0;
+	}
+	
+	//allocate long segments
+	segments 32 /=;
+	segments++;
+	int segCopy;
+	//find "segments" words in a row that are zero
+	i 512 =;
+	while i 1024 <; {
+		segCopy segments =;
+		int attemptLoc;
+		attemptLoc i =;
+		int longEnough;
+		longEnough 1 =;
+		while segCopy; {
+			i tmp@ 1 i os_tape_read$ =;
+			if tmp 0 != i 1024 == |; {
+				longEnough 0 =;
+				break;
+			}
+			segCopy--;
+		}
+
+		if longEnough; {
+			//set aside space for the thing
+			i attemptLoc =;
+			tmp 1(-)=;
+			while segments; {
+				segments--;
+				i tmp@ 1 i os_tape_write$ =;
+			}
+			break;
+		}
+	}
+	if i 1024 ==; {
+		 return 0;
+	}
+	return attemptLoc 512- 512 *;
+}
+
+def os_create_file char# fileName int type length : int {
+	if type 0 ==; {
+		return fileName length os_create_file_continuous$;
+	}
+	
+	int# fileInfo;
+	fileInfo 4 salloc$ =;
+	fileInfo 3 0 arrset$;
+	int index;
+	index 1 os_tape_allocate$ =;
+	index 1 24 << |=;//make sure index has the right fileType specifier
+	fileInfo 3+ index <-;
+	
+	//make sure the filename is not too long
+	int strlength;
+	strlength fileName strlen$ =;
+	if strlength 12 >; {
+		return 0;
+	}
+	
+	//compress four characters per letter
+	int tmpChars;
+	int nloops;
+	nloops 0 =;
+	while strlength; {
+		tmpChars 0 =;
+		tmpChars fileName+++# fileName+++# fileName+++# fileName+++# char_pack$=;
+		strlength 4 -=;
+		if strlength 0 <; {
+			//erase bits that are not supposed to be set
+			strlength 8(-)*=;
+			tmpChars tmpChars strlength << =;
+			tmpChars tmpChars strlength >> =;
+			strlength 0 =;
+		}
+		fileInfo nloops+ tmpChars <-;
+		nloops++;
+	}
+	
+	//find an empty spot in the file list
+	int i;
+	i 8 =;
+	while i 512 <; {
+		int tmp;
+		tmp@ 1 i os_tape_read$; 
+		if tmp 0 ==; {
+			break;
+		}
+		i 4 +=;
+	}
+	
+	//copy our new data into the slot
+	i fileInfo 4 i os_tape_write$=;
+
+	//return the index to the file
+	return index;
+}
+
+def os_create_file_continuous char# fileName int length : int {
+	//allocate the entire file in one chunk
+	//for simplicity we'll allocate only where we have free 512 word segments
+	return 0;
+}
+
+var int TAPE_BUSY = 3;
+var int TAPE_OBE = 1;
+var int TAPE_IBF = 0;
+
+//writes a word and moves the tape to the next position
+def os_tape_writeword int word : {
+	//wait for operations to finish
+	while TAPE_BUSY tape_getStatus$; {
+		;
+	}
+	//wait for OBE
+	while TAPE_OBE tape_getStatus$ 0 ==; {
+		;
+	}
+
+	tapeout 259 <-;//initiate writing of one word
+	//wait for OBE
+	while TAPE_OBE tape_getStatus$ 0 ==; {
+		;
+	}
+	tapeout word <-;//send one word
+
+	return;
+}
+//reads a word and moves the tape to the next opsition
+def os_tape_readword : int {
+	while TAPE_BUSY tape_getStatus$; {
+		;
+	}
+	//wait for OBE
+	while TAPE_OBE tape_getStatus$ 0==; {
+		;
+	}
+	tapeout 257 <-;
+	while TAPE_IBF tape_getStatus$ 0==; {
+		;
+	}
+
+	return tapein#;
+}
+
+//winds the tape to the specified position, and returns the position the tape is after winding
+def seek int pos : int {
+	while TAPE_BUSY tape_getStatus$; {
+		;
+	}
+	while TAPE_OBE tape_getStatus$ 0==; {
+		;
+	}
+	tapeout pos 8 << 2 | <-;
+	return pos;
+}
+
+
+
+//winds the tape to the specified position within a file, and returns the position the tape is after winding
+//def os_file_seek int pos steps : int int {
+//	if pos 24 >> 0 ==; {
+//		return FILE_IFP pos;
+//	}
+//	int posStuff;
+//	posStuff pos =;
+
+//	int segLen;
+	
+//	//get the ammount of file remaining in the current segment
+
+//	segLen pos get_segment_length$=;
+
+//	//subtract min(remaining, steps) from steps, add min(remaining, steps) to pos
+//	if steps segLen <; {
+//		pos segLen +=;
+//		steps 0 =;
+//	}
+
+
+	//while steps > 0 subtract min(steps, segment_filled) from steps, add min(steps, segment_filled) to pos.
+//	while steps 0 >; {
+
+//	}
+	//check for FILE_EOF somewhere around here
+	
+//	return pos;
+//}
+
+
+//returns 1 if status is set
+//returns 0 otherwise
+def tape_getStatus int status : int {
+	return tapestat# 1 status << & status >>;
+}
+
+//cuts a file of at the specified location. The index prior to the one pointed to will be the last content of the file
+//thus, writing something to a file and calling this function will make whatever you wrote be the last things in the file
+//def os_file_cut int index :{
+//	int len tmp;
+//	tmp index 15 & =;
+
+//	if index 0 ==; {
+//		len 0 =;
+//	} else {
+//		len index 1 - =;
+//	}
+//	index len set_segment_length$;
+
+//	return;
+//}
+
+//def os_file_length char# fileName: int{
+//	int handle;
+//	handle fileName openfile$ =;
+//	if handle 0 ==; {
+//		return 1(-);
+//	}
+	//strip header from segment
+//	int tmp;
+//	tmp handle 24 >> =;
+//	if tmp 0 ==; {
+		
+//	}
+
+	//read length of segment
+//	int segLen fileLen;
+//	fileLen 0 =;
+//	segLen handle get_segment_length$=;
+	
+//	while segLen 14 ==; {
+//		fileLen 14 +=;
+//		handle handle get_next_segment$=;
+//		if handle 0 ==; {
+//			break;
+//		}		
+//		segLen handle get_segment_length$=;
+//	}
+	//add segment to length
+//	fileLen segLen +=;
+	
+
+//	return fileLen;
+//}
+
+
+//returns 1 if file deleteion was successful, 0 if not
+//def os_file_delete char# fileName: int{
+	//open the file, go through each segment allocated to the file and zero them out + remove them from the allocation table
+//	int index;
+//	index fileName openFile$=;
+//}
+
+
+//******************************************************************************************
+//************mutex functions***************************************************************
+//******************************************************************************************
+
+def os_mutex_aq int# mutex : int {
+	int i;
+	i mutex # =;
+	if i; {
+		return 0;
+	}
+	mutex 1 <-;
+	return 1;
+}
+
+def os_mutex_drop int# mutex : {
+	mutex 0 <-;
+	return;
+}
+
+//******************************************************************************************
+//**********various tiny programs***********************************************************
+//******************************************************************************************
+
+// stop all interrupt processing, clear interrupts etc. and branch to bootloader
+def reboot : {
+	//I should probably do some stuff with the tape drive too, and clear various hardware buffers
+	44(int#)0 <-;
+	128(func0)$;//finally, branch to loader
+	return;//will not run
+}
+
+

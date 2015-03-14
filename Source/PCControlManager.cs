@@ -29,9 +29,9 @@ namespace ProgCom
         {
             if (id == 0) {
                 return new Tuple<UInt16, int>(0, 4);
-            } else {
+            } else if (id == 1) {
                 return new Tuple<UInt16, int>(56, 3);//figure out where this is supposed to be placed
-            }
+            } else return null;
         }
         
         public int getSegmentCount()

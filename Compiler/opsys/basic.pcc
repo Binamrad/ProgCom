@@ -1,0 +1,946 @@
+//#include osLibs.pcc
+
+//tiny BASIC with a few extra commands:
+//EXIT <- go to os			done
+//SAVE <- save program source		todo
+//LOAD <- load program source		todo
+//DELETE <- remove line			done
+//EDIT <- edit line			done
+//PEEK <- read memory location		done
+//POKE <- set memory location		done
+//BCOL <- set background color		done
+//FCOL <- set foreground color		done
+
+//TODO: 
+//turn some smaller functions into inline assembler to improve speed
+
+
+
+//program code storage
+var int# lineNrs = 0;//this and the next line should be sorted simultaneously
+var char## lineStr = 0;
+var char## freeStrs = 0;//pointers to free strings
+var int freeStrNum = 0;
+var int activeLines = 0;
+var int maxLines = 512;
+
+//program globals
+var int mode = 0;
+var int execStatement = 0;
+var int execLine = 0;
+var int running = 1;
+
+//BASIC variables
+var int# vars = 0;
+var int# varTypes = 0;
+var int# stack = 0;
+var int stackPointer = 0;
+
+
+def main : {
+	//allocate variable storage
+	vars 30 salloc$=;
+	varTypes 30 salloc$=;
+	stack 128 salloc$=;
+
+	//allocate text storage
+	freeStrNum maxLines 1+ =;
+	lineNrs maxLines salloc$=;
+	lineStr maxLines salloc$(char##)=;
+	freeStrs maxLines 1+ salloc$(char##)=;
+	int i;
+	i 0 =;
+	while i freeStrNum <; {
+		freeStrs i+ 67 salloc$(char#) <-;
+		i++;
+	}
+
+	"\n\r" prints$;
+	
+	char# string;
+	int stringlen;
+	int status;
+	while running 0 !=; {
+		if mode 0 ==; {
+			//edit mode
+			"Ready\n\r" prints$;
+			string getString$=;
+			//read a line and make sure it is terminated by "\n\r"
+			string 65 reads$;
+			stringlen string strlen$=;
+			string stringlen+ "\n"# <-;
+			string stringlen++ + "\r"# <-;
+			string stringlen++ + 0(char) <-;
+			//pass string to line
+			string 0 line$;
+		} else {
+			//running mode
+			string lineStr execLine+#=;
+			execLine++;
+			string 1 line$;
+			if execLine activeLines >=; {
+				mode 0 =;
+			}
+		}
+	}
+
+
+	return;
+}
+
+def findLine int lineNr : int int {
+	//perform binary search on the lineNrs list
+	int low high mid index;
+	low 0 =;
+	high activeLines 1- =;
+
+	while low high <=; {
+		mid low high + 1 >> =;
+		index lineNrs mid+#=;
+		if index lineNr ==; {
+			return 1 mid;
+		} else if index lineNr <; {
+			low mid 1+ =;
+		} else {
+			high mid 1- =;
+		}
+	}
+
+	return 0 0;//line does not exist
+}
+
+def deleteLine int lineNr: int {
+	//find the line
+	int status;
+	status lineNr lineNr findLine$=;
+	if status 0 ==; {
+		"Line does not exist" prints$;
+		"\n\r" prints$;
+		return 0;
+	}
+
+	//move the string to the list of available strings
+	char# string;
+	string lineStr lineNr+#=;
+	string restoreString$;
+
+	//compact lists
+	int i;
+	i lineNr 1+ =;
+	while i activeLines <; {
+		lineStr i+ 1- lineStr i+# <-;
+		lineNrs i+ 1- lineNrs i+# <-;
+		i++;
+	}
+	activeLines--;
+	return 1;
+}
+
+def restoreString char# string : {
+	//move the string to the list of available strings
+	freeStrs freeStrNum+ string <-;
+	freeStrNum++;
+	return;
+}
+
+def sortLines : {
+	//sort with regards to lineNrs, perform same shuffling on LineStr
+	//use insertionsort since the strings will almost always be mostly sorted
+	int i;
+	i 1 =;
+	while i activeLines <; {
+		int k;
+		k i =;
+		while k 0 >; {
+			int num1 num2;
+			num1 lineNrs k+#=;
+			num2 lineNrs 1- k+#=;
+			if num1 num2 >; {
+				break;
+			}
+			//swap k and k-1
+			lineNrs k+ num2<-;
+			lineNrs 1- k+ num1<-;
+
+			//swap the strings in the same manner
+			char# str;
+			str lineStr k+#=;
+			lineStr k+ lineStr 1- k+# <-;
+			lineStr 1- k+ str <-;
+
+			k--;
+		}
+		i++;
+	}
+	return;
+}
+
+def getString : char# {
+	char# string;
+	if freeStrNum 0 <=; {
+		return 0(char#);
+	}
+	freeStrNum--;
+	string freeStrs freeStrNum+#=;
+	return string;
+}
+
+
+//******************************************************************
+//parser below
+
+
+//line ::= number statement EOL | statement EOL
+def line char# str int ignoreLineNr: {
+	int status;
+	int result;
+	int lineNumber;
+	char# str2;
+	//try to read a number
+	status result str2 str number$=;
+	if status 0 == ignoreLineNr |; {
+		execStatement 1 =;
+	} else {
+		execStatement 0 =;
+		lineNumber result =;
+	}
+
+	status str2 str2 statement$=;
+	if status 0 != execStatement 0 == &; {
+		//check for EOL here
+		status str2 str2 "\n\r" findKeyword$=;
+		if status 0 ==; {
+			"MISSING LINE BREAK\n\r" prints$;
+			str restoreString$;
+			return;
+		}
+		//add the line to the program list
+		if activeLines maxLines >=; {
+			"PROGRAM LINE OVERFLOW\n\r" prints$;
+			str restoreString$;
+			return;
+		}
+		lineStr activeLines+ str <-;
+		lineNrs activeLines+ lineNumber <-;
+		activeLines++;
+	} else if ignoreLineNr 0 ==;{
+		//put string in free string thing here
+		str restoreString$;
+	}
+	return;
+}
+
+//statement ::= PRINT exprList <- done
+//		IF expression relop expression THEN statement <-TODO
+//		GOTO expression <- done
+//		INPUT varList <- TODO
+//		LET var = expression <- done
+//		GOSUB expression <- done
+//		RETURN <- done
+//		CLEAR <- done, ish
+//		LIST <- done
+//		RUN <- done
+//		END <- done
+def statement char# str : int char# {
+	int status;
+	int result;
+	int tmp;
+	char# str2;
+	status str str "LET" findKeyword$=;
+	if status 0 !=; {
+		status tmp str2 str variable$=;
+		if status 0 ==; {
+			str "Not a variable" printSyntaxErr$;
+			return 0 str;
+		}
+		str str2 =;
+		status str2 str "=" findKeyword$=;
+		if status 0 ==; {
+			str "Expected '='" printSyntaxErr$;
+			return 0 str;
+		}
+		str str2 =;
+		status result str2 str expression$=;
+		if status 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+			return 0 str;
+		}
+		str str2 =;
+		if execStatement 0 !=; {
+			vars tmp+ result <-;
+		}
+		return 1 str;
+	}
+
+	status str str "PRINT" findKeyword$=;
+	if status 0 !=; {
+		status str str exprList$=;
+		return status str;
+	}
+
+	status str str "IF" findKeyword$=;
+	if status 0 !=; {
+		int exprRes1 exprRes2 operator;
+		status exprRes1 str str expression$=;
+		if status 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+			return 0 str;
+		}
+
+		status operator str str 1 relop$=;
+		if status 0 ==; {
+			str "Malformed comparator" printSyntaxErr$;
+			return 0 str;
+		}
+
+		status exprRes2 str str expression$=;
+		if status 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+			return 0 str;
+		}
+
+		//do a lookup on which operator to use
+		if operator 4 ==; {
+			//less
+			tmp exprRes1 exprRes2 < =;
+		} else if operator 7 ==; {
+			//less or equal
+			tmp exprRes1 exprRes2 <= =;
+		} else if operator 8 ==; {
+			//greater than
+			tmp exprRes1 exprRes2 > =;
+		} else if operator 11 ==; {
+			//greater than or equal
+			tmp exprRes1 exprRes2 >= =;
+		} else if operator 12 ==; {
+			//equal
+			tmp exprRes1 exprRes2 == =;
+		} else if operator 6 == operator 9 == |; {
+			//not equal
+			tmp exprRes1 exprRes2 != =;
+		} else {
+			str "Not a comparator" printSyntaxErr$;
+			return 0 str;
+		}
+
+		//if tmp is non-zero or we are not executing code, look for another statement here
+		if tmp 0 != execStatement 0 == |; {
+			status str str statement$=;
+			return status str;
+		}
+		return 1 str;
+	}
+
+	status str str "GOTO" findKeyword$=;
+	if status 0 !=; {
+		status tmp str str expression$=;
+		if status 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+		}
+		if execStatement; {
+			if mode 0 ==; {
+				sortLines$;
+			}
+
+			status tmp tmp findLine$=;
+			if status 0 ==; {
+				str "Line does not exist" printSyntaxErr$;
+				return 0 str;
+			}
+			execLine tmp=;
+		}
+		return 1 str;
+	}
+
+	status str str "INPUT" findKeyword$=;
+	if status 0 !=; {
+		status str str varList$=;
+		if status 0 ==; {
+			return 0 str;
+		}
+		return 1 str;
+	}
+
+	status str str "GOSUB" findKeyword$=;
+	if status 0 !=; {
+		if execStatement 0 !=; {
+			if stackPointer 128 >=; {
+				str "Stack overflow" printSyntaxErr$;
+				return 0 str;
+			}
+			stack stackPointer+ execLine <-;
+			stackPointer++;
+		}
+		return 1 str;
+	}
+
+	status str str "RETURN" findKeyword$=;
+	if status 0 !=; {
+		if execStatement 0 !=; {
+			if stackPointer 0 <=; {
+				str "No return address" printSyntaxErr$;
+				return 0 str;
+			}
+			stackPointer --;
+			execLine stack stackPointer+#=;
+		}
+		return 1 str;
+	}
+
+	status str str "PEEK" findKeyword$=;
+	if status 0 !=; {
+		status result str str expression$=;
+		if status 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+		}
+		status str str "," findKeyword$=;
+		if status 0 ==; {
+			str "Expected ','" printSyntaxErr$;
+		}
+		status tmp str str variable$=;
+		if status 0 ==; {
+			str "Not a variable" printSyntaxErr$;
+		}
+		if execStatement 0 !=; {
+			vars tmp+ result(int#)# <-;
+		}
+		result 1 str;
+	}
+
+	status str str "POKE" findKeyword$=;
+	if status 0 !=; {
+		status result str str expression$=;
+		if status 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+		}
+		status str str "," findKeyword$=;
+		if status 0 ==; {
+			str "Ecpected ','" printSyntaxErr$;
+		}
+		status tmp str str expression$=;
+		if status 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+		}
+		if execStatement 0 !=; {
+			result(int#) tmp <-;
+		}
+		result 1 str;
+	}
+
+	status str str "FCOL" findKeyword$=;
+	if status 0 !=; {
+		status result str str expression$=;
+		if result 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+		}
+		if execStatement 0 !=; {
+			result setfgcol$;
+		}
+		return 1 str;
+	}
+
+	status str str "BCOL" findKeyword$=;
+	if status 0 !=; {
+		status result str str expression$=;
+		if result 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+		}
+		if execStatement 0 !=; {
+			result setbgcol$;
+		}
+		return 1 str;
+	}
+
+	status str str "LIST" findKeyword$=;
+	if status 0 !=; {
+		sortLines$;
+		tmp 0 =;
+		while tmp activeLines <; {
+			str2 lineStr tmp+#=;
+			str2 prints$;
+			tmp++;
+		}
+		return status str;
+	}
+
+	status str str "CLEAR" findKeyword$=;
+	if status 0 !=; {
+		//restore all code lines
+		tmp activeLines 1- =;
+		while tmp 0 >=; {
+			lineNrs tmp+# deleteLine$;
+			tmp--;
+		}
+		//zero all variables
+		//reset stack pointer
+		stackPointer 0 =;
+		//stop execution
+		mode 0 =;
+		//reset execution point
+		execLine 0 =;
+		return 1 str;
+	}
+
+	status str str "RUN" findKeyword$=;
+	if status 0 !=; {
+		if execStatement 0 !=; {
+			sortLines$;
+			mode 1 =;
+		}
+		return 1 str;
+	}
+
+	status str str "EDIT" findKeyword$=;
+	if status 0 !=; {
+		status result str str expression$=;
+		if status 0 ==; {
+			str "Malformed expression" printSyntaxErr$;
+			return 0 str;
+		}
+
+		if execStatement 0 !=; {
+			sortLines$;
+			status result result findLine$=;
+			if status 0 ==; {
+				str "Line does not exist" printSyntaxErr$;
+				return 0 str;
+			}
+			str2 lineStr result+#=;
+			str2 65 edits$;
+			status str2 strlen$=;
+			//add \n\r\0 termination
+			str2 status+ "\n"#<-;
+			str2 status++ + "\r"#<-;
+			str2 status++ + 0(char)<-;
+		}
+		return 1 str;
+	}
+
+	status str str "END" findKeyword$=;
+	if status 0 !=; {
+		execLine 0 =;
+		mode 0 =;
+		return 1 str;
+	}
+
+	status str str "EXIT" findKeyword$=;
+	if status 0 !=; {
+		if execStatement 0 !=; {
+			running 0 =;
+		}
+		return 1 str;
+	}
+
+	status str str "DELETE" findKeyword$=;
+	if status 0 !=; {
+		if execStatement 0 !=; {
+			status result str str expression$=;
+			if status 0 ==; {
+				str "Malformed expression" printSyntaxErr$;
+				return 0 str;
+			}
+			status result deleteLine$=;
+		}
+		return status str;
+	}
+
+
+	mode 0 =;
+	str "Unrecognised keyword" printSyntaxErr$;
+	return 0 str;
+}
+
+//exprList ::= (string|expression) (, (string|expression) )*
+def exprList char# str : int char# {
+	int status;
+	char# buffer;
+	buffer 64 salloc$(char#)=;
+	while 0 0 ==; {
+		//find string OR expression and then print the result
+		status str str "\"" findKeyword$=;
+		if status 0 !=; {
+			char c;
+			c str#=;
+			int i;
+			i 0 =;
+			while c "\""# !=; {
+				if c "\\"# ==; {
+					//print escape character
+					//escape characters to handle: n r b " \ t
+					str++;
+					c str#=;
+					if c "n"# ==; {
+						buffer i+ "\n"# <-;
+					} else if c "r"# ==; {
+						buffer i+ "\r"# <-;
+					} else if c "b"# ==; {
+						//buffer i+ "\n"# <-;
+					} else if c "\""# ==; {
+						buffer i+ "\""# <-;
+					} else if c "\\"# ==; {
+						buffer i+ "\\"# <-;
+					} else if c "t"# ==; {
+						buffer i+ "\t"# <-;
+					} else {
+						str "Illegal escape character" printSyntaxErr$;
+						return 0 str;
+					}
+				} else {
+					//if c is equal to null, \n or \r give syntax error here
+					if c "\n"# == c 0 == c "\r"# == | |; {
+						str "Illegal character" printSyntaxErr$;
+						return 0 str;
+					}
+					buffer i+ c <-;
+				}
+				str++;
+				i++;
+				c str#=;
+			}
+			str++;
+			buffer i+ 0(char) <-;
+			if execStatement 0 !=; {
+				buffer prints$;
+			}
+			
+		} else {
+			int result;
+			status result str str expression$=;
+			if status 0 !=; {
+				if execStatement 0 !=; {
+					//do int-to-string here and print
+					buffer result 10 itoa$;
+					buffer prints$;
+				}
+			} else {
+				//syntax error
+				str "Malformed expression" printSyntaxErr$;
+				return 0 str;
+			}
+		}
+		status str str "," findKeyword$=;
+		if status 0 ==; {
+			break;
+		}
+	}
+	return 1 str;
+}
+
+//varList ::= var (, var)*
+def varList char# str : int char# {
+	int vari status result;
+	char# str2;
+	str2 13 salloc$(char#)=;
+	status 1 =;
+	while status 0 !=; {
+		status vari str str variable$=;
+		if status 0 ==; {
+			str "Not a variable" printSyntaxErr$;
+			return 0 str;//print error message eventually
+		}
+		if execStatement 0 !=; {
+			"?" prints$;
+			str2 13 reads$;
+			//interpret str as an integer	
+			status result str2 atoi$=;
+			if status 0 ==; {
+				"Not an integer" prints$;
+				return 0 str;//print error message eventually
+			}	
+			//assign to variable
+			vars vari+ result <-;
+		}
+
+		status str str "," findKeyword$=;
+	}
+	
+	return 1 str;
+}
+
+//expression ::= (+|-|EPS) term ((+|-) term)*
+def expression char# str : int int char# {
+	int status;
+	int result;
+	int tmp tmp2;
+	//first check for +/-/EPS
+	status str str "+" findKeyword$=;
+	tmp 0 =;
+	if status 0 ==; {
+		status str str "-" findKeyword$=;
+		if status 0 !=; {
+			tmp 1 =;
+		}
+	}
+
+	result 0 =;
+	while 0 0 ==; {
+		//find a term and perform addition/subtraction
+		status tmp2 str str term$=;
+		if status 0 ==; {
+			return status 0 str;
+		}
+		if tmp 0 ==; {
+			result tmp2 +=;
+		} else {
+			result tmp2 -=;
+		}
+
+		status str str "+" findKeyword$=;
+		if status 0 ==; {
+			status str str "-" findKeyword$=;
+			if status 0 !=; {
+				tmp 1 =;
+			} else {
+				break;
+			}
+		} else {
+			tmp 0 =;
+		}
+	}
+	
+	return 1 result str;
+}
+
+//term ::= factor ((*|/) factor)*
+def term char# str : int int char# {
+	int status;
+	int result;
+	int tmp tmp2;
+	result 1 =;
+	tmp 0 =;
+	while 0 0 ==; {
+		//find a factor and perform multiplication/division
+		status tmp2 str str factor$=;
+		if status 0 ==; {
+			return status 0 str;
+		}
+		if tmp 0 ==; {
+			result tmp2 *=;
+		} else {
+			result tmp2 /=;
+		}
+
+		status str str "*" findKeyword$=;
+		if status 0 ==; {
+			status str str "/" findKeyword$=;
+			if status 0 !=; {
+				tmp 1 =;
+			} else {
+				break;
+			}
+		} else {
+			tmp 0 =;
+		}
+	}
+
+	return 1 result str;
+}
+
+//factor ::= variable | number | (expression)
+def factor char# str : int int char#{
+	int status;
+	int result;
+	__nosave str;
+	asm str;
+	"push	ra"
+	"call	variable"
+	"beq	r1, r0, 3"
+	"rd	r4, r0, vars"
+	"rdr	r2, r4, r2"
+	"br	factor_asm_end"
+	"mov	r1, r3"
+	"call	number"
+	"bne	r1, r0, factor_asm_end"
+
+	"rd	r4, r3, 0"
+	"movi	r5, 40"
+	"bne	r4, r5, factor_asm_failure"
+	"addi	r1, r3, 1"
+	
+	"call	expression"
+	"beq	r1, r0, factor_asm_failure"
+
+	"rd	r4, r3, 0"
+	"movi	r5, 41"
+	"bne	r4, r5, factor_asm_failure"
+	"addi	r3, r3, 1"
+	"br	factor_asm_end"
+
+	"factor_asm_failure:"
+	"movi	r1, 0"
+	"movi	r2, 0"
+	"factor_asm_end:"
+	"pop	ra";
+	status result str;
+	__nosave status;
+	__nosave result;
+	__nosave str;
+	return status result str;
+}
+
+//var ::= A |B | C ... | Y | Z
+def variable char# str : int int char# {
+	__nosave str;
+	int status variable;
+	asm str;
+	"push	ra"
+	"call	checkSpace"
+	"rd	r4, r1, 0"
+	"movi	r5, 65"
+	"bl	r4, r5, variable_asm_not"
+	"movi	r5, 90"
+	"bl	r5, r4, variable_asm_not"
+	"addi	r3, r1, 1"
+	"movi	r1, 1"
+	"subi	r2, r4, 65"
+	"br	variable_asm_end"
+	"variable_asm_not:"
+	"mov	r3, r1"
+	"movi	r1, 0"
+	"movi	r2, 0"
+	"variable_asm_end:"
+	"pop	ra";
+	status variable str;
+	__nosave status;
+	__nosave variable;
+	__nosave str;
+	return status variable str;
+}
+
+//number ::= digit digit*
+def number char# str: int int char# {
+	__nosave str;
+	int status result;
+	asm str;
+	"push	ra"
+	"call	checkSpace"
+	"push	a4"//a4 is accumulator
+	"mov	a4, r0"
+	"call	digit"
+	"beq	r1, r0, number_asm_end"
+	"number_asm_loop:"
+	"muli	a4, a4, 10"
+	"add	a4, a4, r2"
+	"mov	r1, r3"
+	"call	digit"
+	"bne	r1, r0, number_asm_loop"
+	"movi	r1, 1"
+	"number_asm_end:"
+	"mov	r2, a4"
+	"pop	a4"
+	"pop	ra";
+	status result str;
+	__nosave status;
+	__nosave result;
+	__nosave str;
+	return status result str;
+}
+
+//digit ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+def digit char# str: int int char#{
+	__nosave str;
+	int status digit;
+	asm str;
+	"rd	r2, r1, 0"
+	"subi	r2, r2, 48"
+	"bl	r2, r0, digit_asm_not"
+	"movi	r4, 9"
+	"bl	r4, r2, digit_asm_not"
+	"addi	r3, r1, 1"
+	"movi	r1, 1"
+	"br	digit_asm_end"
+	"digit_asm_not:"
+	"mov	r3, r1"
+	"movi	r1, 0"
+	"movi	r2, 0"
+	"digit_asm_end:";
+	status digit str;
+	__nosave status;
+	__nosave digit;
+	__nosave str;
+	return status digit str;
+}
+
+//relop	::= < (>|=|EPS) | > (<|=|EPS) | =
+def relop char# str int recurse: int int char# {
+	int status result tmp;
+	str str checkSpace$=;
+
+	char# string;
+	string "<\0>\0=\0\0"=;
+	result 1 =;
+	while string#; {
+		status str str string findKeyword$=;
+		if status 0 !=; {
+			if recurse 0 !=; {
+				status tmp str str 0 relop$=;
+				result result 2 << tmp | =;
+				result tmp |=;
+			}
+			return 1 result str;
+		}
+
+		string 2 +=;
+		result++;
+	}
+	
+	return 0 0 str;
+}
+
+//**************************************************
+//various helper functions
+
+
+//helper function to check for whitespace
+def checkSpace char# str : char# {
+	__nosave str;
+	asm str;
+	"movi	r3, 32"
+	"movi	r4, 9"
+	"br checkSpace_loopCond"
+	"checkSpace_loop:"
+	"addi	r1, r1, 1"
+	"checkSpace_loopCond:"
+	"rd	r2, r1, 0"
+	"beq	r2, r3, checkSpace_loop"
+	"beq	r2, r4, checkSpace_loop";
+	str;
+	__nosave str;
+	return str;
+}
+
+//helper function to check for a keyword
+def findKeyword char# str keyword : int char# {
+	__nosave str;
+	str str checkSpace$=;
+	__nosave str;
+	int status;
+	asm str keyword;
+	"mov	r5, r1"
+	"mov	r6, r1"
+	"movi	r1, 1"
+	"findKeyword_loop:"
+	"rd	r3, r5, 0"
+	"rd	r4, r2, 0"
+	"beq	r4, r0, findKeyword_end"
+	"addi	r5, r5, 1"
+	"addi	r2, r2, 1"
+	"beq	r3, r4, findKeyword_loop"
+	"movi	r1, 0"
+	"mov	r5, r6"
+	"findKeyword_end:"
+	"mov	r2, r5";
+	status str;
+	__nosave status;
+	__nosave str;
+	return status str;
+}
+
+def printSyntaxErr char# str1 str2 : {
+	"SYNTAX ERROR:\n\r" prints$;
+	str1 prints$;
+	"\n\r^\n\r" prints$;
+	str2 prints$;
+	"\n\r" prints$;
+	return;
+}

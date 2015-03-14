@@ -14,32 +14,42 @@ namespace ProgCom
         UInt16 charSetPtr;
         UInt16 colorPointer;
         UInt16 modePtr;
+        UInt16 scrollPointer;
         Color32[] colors;
         Color32[] imageBuffer;
         protected int windowID;
-        UInt16 address = 62959;
+        UInt16 address = 60910;
         GUIStates guis = new GUIStates();
         bool updateScreen = false;
         bool updateCols = false;
 
 
+        private void clearScreen(Color32 c)
+        {
+            for (int x = 0; x < 256*256; x++) {
+                imageBuffer[x] = c;
+            }
+        }
+
         public override void  OnStart(PartModule.StartState state) {
  	        base.OnStart(state);
             if (state.Equals(PartModule.StartState.Editor)) return;//don't start stuff in the editor
             windowID = Util.random();
-            mem = new Int32[2577];
-            pointer = 529;
-            charSetPtr = 17;
+            mem = new Int32[4626];
+            pointer = 530;
+            charSetPtr = 18;
+            colorPointer = 2;
+            modePtr = 1;
+            scrollPointer = 0;
             colors = new Color32[16];
-            modePtr = 0;
             for (int i = 0; i < 16; ++i) {
                 colors[i] = new Color32();
                 colors[i].a = 255;
             }
-            colorPointer = 1;
 
             imageBuffer = new Color32[256*256];
             image = new Texture2D(256, 256, TextureFormat.ARGB32, false);
+            image.filterMode = FilterMode.Point;
             windowPos = new Rect();
             if ((windowPos.x == 0) && (windowPos.y == 0))//windowPos is used to position the GUI window, lets set it in the center of the screen
             {
@@ -81,17 +91,232 @@ namespace ProgCom
             }
         }
 
-        private float dTime = 0.0f;
-        private const float redrawTime = 1.0f / 30.0f;
+        
+
+
+        //private float dTime = 0.0f;
+        //private const float redrawTime = 1.0f / 30.0f;
+
+
+        int drawIndex = 0;
+        void putPixel(int color)
+        {
+            if (drawIndex >= (256 * 256)) {
+                return;
+            }
+
+            //what bits do we have?
+
+            //index:    name:   what:
+            //0-1       R       Resolution
+            //2-3       --      unused
+            //4-5       CDE      Color Depth Expected
+
+
+            Color32 displayColor = colors[0];
+            int colorDepth = (mem[modePtr] >> 20) & 3;
+            switch (colorDepth) {
+                case 0:
+                    displayColor = colors[color & 15];
+                    break;
+                case 1:
+                    displayColor = colors[color & 1];
+                    break;
+                case 2:
+                    displayColor = new Color32();
+                    displayColor.a = 255;
+                    displayColor.r = (byte)color;
+                    displayColor.g = (byte)color;
+                    displayColor.b = (byte)color;
+                    break;
+                case 3:
+                    displayColor = new Color32();
+                    displayColor.a = 255;
+                    displayColor.r = (byte)(((color & 65535) >> 7) & 248);
+                    displayColor.g = (byte)(((color & 65535) >> 2) & 248);
+                    displayColor.b = (byte)(((color & 65535) << 3) & 248);
+                    break;
+            }
+
+            //determine the mode of the pixel-putting
+            int pixelSize = ((mem[modePtr]>>16) & 3);
+            switch (pixelSize) {
+                case 0:
+                    imageBuffer[(drawIndex)^0xFF00] = displayColor;
+                    drawIndex++;
+                    break;
+                case 1:
+                    imageBuffer[(drawIndex)^0xFF00] = displayColor;
+                    imageBuffer[(drawIndex+1)^0xFF00] = displayColor;
+                    drawIndex += 2;
+                    break;
+                case 2:
+                    imageBuffer[(drawIndex)^0xFF00] = displayColor;
+                    imageBuffer[(drawIndex+1)^0xFF00] = displayColor;
+                    imageBuffer[(drawIndex+256)^0xFF00] = displayColor;
+                    imageBuffer[(drawIndex+256+1)^0xFF00] = displayColor;
+                    drawIndex += 2;
+                    drawIndex += (drawIndex & 256);//make sure we skip the next line if we are at the end of our current line
+                    break;
+                case 3:
+                    for (int y = 0; y < 4; y++) {
+                        for (int x = 0; x < 4; x++) {
+                            imageBuffer[(drawIndex + y*256 + x)^0xFF00] = displayColor;
+                        }
+                    }
+                    drawIndex += 4;
+                    drawIndex += (drawIndex & 256);
+                    drawIndex += (drawIndex & 512);//make sure we skip three lines if we are at the end of our current line
+                    break;
+            }
+        }
+
+        void streamPixels()
+        {
+            //what bits do we have?
+            //index:    name:   what:
+            //0         BTB     bitmap toggle bit
+            //1         HCTB    High-color toggle bit
+            //2         EM      enable monochrome
+            //3         ICDB    increased color depth bitmaps
+            //4         DDS     double data set
+            //5         DT      double transmission, sends each pixel twice
+
+
+            //what modes do we have?
+
+            //0: tile modes:
+                //tiled 2x 24-bit color, 16 color palette, for 256*256, STANDARD
+                    //already implemented and documented <- done
+                //tiled 4x 24-bit color, 16 color palette, for 256*128
+                    //unlocked by enabling HCTB <- done
+                //tiled 8-bit color, b&w versions of above
+                    //unlocked by toggling EM
+                //tiled 2x 15-bit color, 1 bit bitmap, for 256*128
+                    //unlocked by toggling HCTB & DDS
+            //1: bitmapped modes:
+                //bitmapped  1 bit, STANDARD <- done
+                    //already implemented and documented
+                //bitmapped  4 bit, up to 256*128 <- done
+                    //unlock by enable BTB & HCTB + CDE4
+                //bitmapped  8 bit, up to 128*128 w. DDS <- done
+                    //unlock by enabling BTB & HCTB & FM + CDE8
+                //bitmapped 15 bit, 64*64 <- done
+                    //unlock by enabling BTB & HCTB & ICDB + CDE15
+
+            //TODO:
+            //1: implement additional blocky modes
+            //2: implement monochrome enable bit
+            //3: implement scrolling properly
+
+            //reset pixel streamer
+            drawIndex = 0;
+            //clear Screen
+            clearScreen(new Color32(0,0,0,255));
+
+            bool doubleTrans = ((mem[modePtr] & 32) == 32);
+
+            if ((mem[modePtr] & 1) == 0) {
+                //tiled mode
+                int dataSet = 512;
+                if ((mem[modePtr] & 16) == 16) dataSet *= 2;
+                int finalMask = (mem[modePtr]&4) == 4 ? 1 : 7;
+                bool ColExtendMode = ((mem[modePtr] & 2) == 2);
+                Int32[] cache = new Int32[64];
+                for (int x = 0; x < dataSet; x += 16) {
+                    //fetch all tiles
+                    for (int i = 0; i < 64; i+=4) {
+                        Int32 currentChar = mem[pointer + ((mem[scrollPointer]+(i >> 2) + x)&4095)];
+                        cache[i]    = mem[charSetPtr + (currentChar & 0xff )*2  ];
+                        cache[i+1]  = mem[charSetPtr + (currentChar & 0xff )*2+1];
+                        cache[i+2]  = mem[charSetPtr + ((currentChar >> 16) & 0xff )*2  ];
+                        cache[i+3]  = mem[charSetPtr + ((currentChar >> 16) & 0xff )*2+1];
+                    }
+                    //draw tiles line-by-line
+                    for (int h = 0; h < 8; h++) {
+                        for (int w = 0; w < 256; w++) {
+                            int maskShift;
+                            int selectedBits;
+                            int colorTableResult;
+                            if(ColExtendMode) {
+                                //get 2 bits of data to index 4 2 bit sections in the on-char color index. Append color index as higher two bits in number
+                                selectedBits = cache[(w / 8) * 2 + (h / 4)];
+                                maskShift = ((w & 7) & 6) + (h & 3) * 8;
+                                selectedBits = selectedBits & (3 << (6^maskShift));
+                                selectedBits = selectedBits >> (6^maskShift);
+                                
+                                //find the index in the color lookup table on the character we are currently rendering according to the 2 bit index in the character symbol data
+                                colorTableResult = mem[pointer + (mem[scrollPointer]+ x + (w / 16))&4095] & (3 << (8+selectedBits * 2 + (w&8)*2));
+                                colorTableResult = colorTableResult >> (8+selectedBits * 2 + (w & 8) * 2);
+                                
+                                //mix colorTableResult with the bit mode to enable us to use every color in the table
+                                colorTableResult = (colorTableResult << 2) | selectedBits;
+
+                                //render pixel
+                                putPixel(colorTableResult&finalMask);
+                                if (doubleTrans) putPixel(colorTableResult & finalMask);
+                                w++;//make sure that the resolution is properly halved
+                            } else {
+                                //get 1 bit of data to index 2 4 bit sections in the on-char color index.
+                                selectedBits = cache[(w / 8) * 2 + h / 4];
+                                maskShift = (w & 7) + (h & 3) * 8;
+                                selectedBits = selectedBits & (1 << (7^maskShift));//note that the top bit of each byte is to be read first
+                                selectedBits = selectedBits >> (7^maskShift);
+                                //find the 4-bit index in the color lookup table on the character we are currently rendering according to the 1 bit index in the character symbol data
+                                colorTableResult = mem[pointer + (mem[scrollPointer]+x + (w / 16))&4095] & (7 << (8+(4^selectedBits * 4) + (w & 8) * 2));
+                                colorTableResult = colorTableResult >> (8+(4^selectedBits * 4) + (w & 8) * 2);
+
+                                //render pixel
+                                putPixel(colorTableResult&finalMask);
+                                if (doubleTrans) putPixel(colorTableResult & finalMask);
+                            }
+                        }
+                    }
+                }
+            } else {
+                //bitmap mode
+                int bitsPerPixel = 1;
+                if ((mem[modePtr] & 2) == 2) {
+                    bitsPerPixel = 4;
+                }
+                if ((mem[modePtr] & 4) == 4) {
+                    bitsPerPixel = 8;
+                }
+                if ((mem[modePtr] & 8) == 8) {
+                    if (bitsPerPixel == 4) {
+                        bitsPerPixel = 16;
+                    }
+                    bitsPerPixel *= 2;
+                }
+                int dataSetSize = 2048;
+                if ((mem[modePtr] & 16) == 16) {
+                    dataSetSize *= 2;
+                }
+                int bitMask = 0xffff;
+                if ((mem[modePtr] & 4) == 4) {
+                    bitMask = 0xff;
+                }
+                //loop through the data set and send all data to screen
+                for (int x = 0; x < dataSetSize; x++) {
+                    int data = mem[pointer + ((mem[scrollPointer]+x) & 4095)];
+                    for (int b = 0; b < 32; b += bitsPerPixel) {
+                        putPixel( ((data >> b) & (1<<b)-1) & bitMask );
+                        if (doubleTrans) putPixel(((data >> b) & (1 << b) - 1) & bitMask);
+                    }
+                }
+            }
+
+        }
+
 
         void drawImage()
         {
             //lock screen to 30fps
-            dTime += UnityEngine.Time.deltaTime;
-            if (dTime < redrawTime) return;
-            while (dTime >= redrawTime) {
-                dTime -= redrawTime;//this step is in a while loop to adjust for slow refresh rates (ie game runs at less than 30fps)
-            }
+            //dTime += UnityEngine.Time.deltaTime;
+            //if (dTime < redrawTime) return;
+            //while (dTime >= redrawTime) {
+            //    dTime -= redrawTime;//this step is in a while loop to adjust for slow refresh rates (ie game runs at less than 30fps)
+            //}
 
             if (!updateScreen) {
                 return;
@@ -102,14 +327,14 @@ namespace ProgCom
                 updateColors();
                 updateCols = false;
             }
-            if ((mem[modePtr] & 1) == 0) {
+            if (mem[modePtr] == 0) {
                 //colour character set
                 for (int y = 0; y < 32; ++y) {
                     int offset = (31-y) * 2048;
                     for (int x = 0; x < 16; ++x) {
                         //read four characters and all colours from text buffer
                         //since each character+colour is 16 bit, this should net us 2 characters at a time
-                        Int32 AB = mem[pointer + y * 16 + x];
+                        Int32 AB = mem[pointer + ((y * 16 + x + mem[scrollPointer]) & 4095)];
                         UInt16 A = (UInt16)(AB & 0xffff);
                         UInt16 B = (UInt16)((AB >> 16) & 0xffff);
                         //load the font for all characters
@@ -126,12 +351,12 @@ namespace ProgCom
                         offset += 16;
                     }
                 }
-            } else {
+            } else if (mem[modePtr] == 1) {
                 //monochrome display
                 for (int y = 0; y < 256; ++y) {
                     int offset = ((255 - y) * 256);
                     for (int x = 0; x < 8; ++x) {
-                        Int32 pixels = mem[pointer + y * 8 + x];
+                        Int32 pixels = mem[pointer + ((y * 8 + x + mem[2047]) & 2047)];
                         for (int i = 0; i < 32; ++i) {
                             bool set = ((pixels >> i) & 1) != 0;
                             imageBuffer[offset + i] = set ? colors[1] : colors[0];
@@ -139,6 +364,8 @@ namespace ProgCom
                         offset += 32;
                     }
                 }
+            } else {
+                streamPixels();
             }
             image.SetPixels32(imageBuffer);
             image.Apply(false);
@@ -160,12 +387,57 @@ namespace ProgCom
             }
         }
 
-
+        int guiScaleFactor = 1;
         //Now to display this we can include it in a GUI window. See the "Creating a Window GUI" example for how to bring up a window.
         //In the window GUI code we just need this line to put our Texture2D on the screen:
         protected void windowGUI(int windowID)
         {
-            GUILayout.Box(image);
+            //normal gui style
+            GUIStyle mySty = new GUIStyle(GUI.skin.button);
+            mySty.normal.textColor = mySty.focused.textColor = Color.white;
+            mySty.hover.textColor = mySty.active.textColor = Color.yellow;
+            mySty.onNormal.textColor = mySty.onFocused.textColor = mySty.onHover.textColor = mySty.onActive.textColor = Color.green;
+            mySty.padding = new RectOffset(8, 8, 8, 8);
+
+            //gui style when off
+            GUIStyle offSty = new GUIStyle(GUI.skin.button);
+            offSty.normal.textColor = offSty.focused.textColor = Color.grey;
+            offSty.hover.textColor = offSty.active.textColor = Color.grey;
+            offSty.onNormal.textColor = offSty.onFocused.textColor = offSty.onHover.textColor = offSty.onActive.textColor = Color.green;
+            offSty.padding = new RectOffset(8, 8, 8, 8);
+            
+            GUIStyle imageStyle = new GUIStyle();
+            imageStyle.stretchHeight = true;
+            imageStyle.stretchWidth = true;
+            imageStyle.fixedHeight = 0;
+            imageStyle.fixedWidth = 0;
+
+            GUILayout.BeginVertical();
+            GUILayout.Box("",GUILayout.Width((float)256*guiScaleFactor), GUILayout.Height((float)256*guiScaleFactor));
+            GUI.DrawTexture(new Rect(7, 28, 256*guiScaleFactor, 256*guiScaleFactor), image, ScaleMode.StretchToFill);
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("1x", guiScaleFactor == 1 ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            {
+                guiScaleFactor = 1;
+                windowPos.width = 0;
+                windowPos.height = 0;
+            }
+            if (GUILayout.Button("2x", guiScaleFactor == 2 ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            {
+                guiScaleFactor = 2;
+                windowPos.width = 0;
+                windowPos.height = 0;
+            }
+            if (GUILayout.Button("3x", guiScaleFactor == 3 ? mySty : offSty, GUILayout.ExpandWidth(true)))//GUILayout.Button is "true" when clicked
+            {
+                guiScaleFactor = 3;
+                windowPos.width = 0;
+                windowPos.height = 0;
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.EndVertical();
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
         }
 
@@ -442,7 +714,7 @@ namespace ProgCom
             0x60301870, 0x78,
             0x3c3c0000, 0x3c3c,
             0x0, 0x0
-                        };
+            };
             return cga_8;
         }
 
@@ -465,7 +737,7 @@ namespace ProgCom
 	        0x009ad284,
 	        0x006c5eb5,
 	        0x00959595
-        };
+            };
             return c64Cols;
         }
 
@@ -481,7 +753,7 @@ namespace ProgCom
 
         public Tuple<ushort, int> getSegment(int id)
         {
-            return new Tuple<UInt16, int>(address, 2577);
+            return new Tuple<UInt16, int>(address, 4626);
         }
 
         public int getSegmentCount()

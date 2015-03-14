@@ -134,6 +134,8 @@ movhw/movhwr	MOVe Half-Word			replace half-word C/rC of rA with half-word C/rC o
 movbl/movblr	MOV Byte Low			replace byte C/rC of rA with byte 0 of rB			movbl	r1, r2, 4
 movhwl/movhwlr	MOVe Half-Word Low		replace half-word C/rC of rA with half-word 0 of rB		movhwl	r1, r2, 0
 
+More instructions have been added, but since they have not been tested they are also not documented here. For more info, see the source.
+
 
 Interrupts:
 

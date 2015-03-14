@@ -16,8 +16,8 @@ namespace ProgCom
         const int insCacheSize = 256;//ditto
         const int rowSize = 8;//must be a power of two
         const int blocks = 2;//must be a number of two
-        const int firstWordDelay = 3;//number of cycles until the first word appears on cache load
-        const int wordFetchRate = 2;//number of cycles for each subsequent word on cache load
+        const int firstWordDelay = 4;//number of cycles until the first word appears on cache load
+        const int wordFetchRate = 1;//number of words that are fetched per cycle. Should not be larger than rowSize. Should be a power of two.
 
         //check if address addr in in the cache
         private bool isInCache(UInt16 addr, UInt16[,] cache, int[] loadOrder)
@@ -57,10 +57,10 @@ namespace ProgCom
                 //if the address is uncacheable, do a spearate process for hardware memory access here
                 int devices = mem.devicesInRange((ushort)(address & (0xffff - rowSize + 1)), rowSize);
                 if (devices > 0) {
-                    return firstWordDelay + (devices >> 1) - ((devices+2)>>3);//approx log2(devices) + delay
+                    return firstWordDelay;
                 } else {
                     loadLoc(address, cache, loadOrder);
-                    return firstWordDelay + (rowSize - 1) * wordFetchRate;
+                    return firstWordDelay + (rowSize - wordFetchRate) / wordFetchRate;
                 }
             } else return 1;
         }

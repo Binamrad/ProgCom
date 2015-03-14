@@ -7,6 +7,7 @@ public class VariableContext {
 	private String[] registers;
 	private HashMap<String, Integer> varStackPos;
 	private HashMap<String, String> globalVars;
+	private LinkedList<String> hasPointerTo;
 	private final int regAmmount = 32-6;//r0, ra, fp, sp, ea, es are not permitted. Once I roll to the next patch, EX will be added to that.
 	private final int mustPushLimit = 16;//the point at which we need to restore the registers after we've used them
 	private int[] registerAge;
@@ -21,6 +22,7 @@ public class VariableContext {
 		//init all other things
 		registers = new String[regAmmount];
 		varStackPos = new HashMap<String,Integer>();
+		hasPointerTo = new LinkedList<String>();
 		this.globalVars = new HashMap<String, String>();
 		for(Variable v : globalVars) {
 			this.globalVars.put(v.name, v.name);
@@ -31,7 +33,7 @@ public class VariableContext {
 		this.asm = asm;
 	}
 	//will arrange the parameters in r1->rN. if parameters are true, make sure that all variables are properly stored etc.
-	public void arrange(LinkedList<String> varNames, boolean dataMove) {
+	public void arrange(LinkedList<String> varNames, boolean dataMove, LinkedList<String> tryNotToSave) {
 		int i = 0;
 		for(String variable : varNames) {
 			if(!varExists(variable)) throw new SyntaxErrorException("Variable does not exist: " + variable);
@@ -47,7 +49,12 @@ public class VariableContext {
 								store(i);
 								break;
 							}
-							store(x);
+							
+							//be conservative when storing variables
+							if(!tryNotToSave.contains(registers[x]) || globalVars.containsKey(registers[x]) || hasPointerTo.contains(registers[x])) {
+								store(x);//make sure variable at x is not lost
+							}
+							//store(x);
 							registers[x] = registers[i];
 							registers[i] = null;
 							asm.add("mov", regName(x), regName(i));
@@ -59,7 +66,9 @@ public class VariableContext {
 						++x;
 					}
 				} else {
-					store(i);//make sure variable at i is not lost
+					if(!tryNotToSave.contains(registers[i]) || globalVars.containsKey(registers[i]) || hasPointerTo.contains(registers[i])) {
+						store(i);//make sure variable at i is not lost
+					}
 				}
 			}
 			if(varPos == i) {//we don't need to do anything if this is condition is true
@@ -68,7 +77,10 @@ public class VariableContext {
 			} else if(varPos != -1 && varPos != -10) {
 				if(dataMove) {
 					if(!variable.startsWith("__TMP")) {
-						store(varPos);
+						if(!tryNotToSave.contains(registers[varPos]) || globalVars.containsKey(registers[varPos]) || hasPointerTo.contains(registers[varPos])) {
+							store(varPos);//make sure variable at varPos
+						}
+						//store(varPos);
 					}
 					registers[varPos] = null;
 					unAlter(varPos);
@@ -195,13 +207,15 @@ public class VariableContext {
 	}
 	
 	//will unassociate all registers with variables, and save all data
-	public void clearAll() {
+	public void clearAll(LinkedList<String> exceptions) {
 		for(int i = 0; i < regAmmount; ++i) {
+			if(!exceptions.contains(registers[i]) || globalVars.containsKey(registers[i]) || hasPointerTo.contains(registers[i])) {
+				store(i);//make sure no data is lost
+			}
 			registerAge[i] = 0;//reset age of all registers, not necessarily necessary, but I felt it is good to be tidy.
-			store(i);//make sure no data is lost
 			registers[i] = null;//un-associate variable names with registers
 		}
-		//resetAlteredList();//if something broke, fix it here
+		//resetAlteredList();//if something broke, uncomment
 	}
 	
 	//return -1 if not loaded, otherwise return register index of variable
@@ -299,6 +313,7 @@ public class VariableContext {
 	public void addressOf(String dest, String a) {
 		if(!varExists(a)) throw new InternalCompilerException("Variable does not exist: " + a);//update this when global variables are added
 		if(varStackPos.containsKey(a)) {
+			hasPointerTo.add(a);
 			int addr = varStackPos.get(a);
 			asm.add("addi",freeVar(dest), "fp", ""+addr);
 			if(addr+1 > maxStackUsed) maxStackUsed = addr+1;

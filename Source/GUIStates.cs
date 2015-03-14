@@ -7,6 +7,6 @@ namespace ProgCom
 {
     public class GUIStates
     {
-        public bool ctl, ttl, gui, mon, kbd;
+        public bool ctl, ttl, gui, mon, kbd, tap;
     }
 }

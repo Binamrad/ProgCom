@@ -1,0 +1,385 @@
+//interrupt table:
+//software interrupts:
+//0: printstr
+//1: printchar
+//2: readstr
+//3: readchar
+//4: scroll
+//5: screen fill
+//6: setBgCol
+//7: setFgCol
+//8: string edit
+
+//10: tape read
+//11: tape write
+//12: file read
+//13: file write
+//14: open file
+//15: make file
+
+//20: interruptRegister
+
+//system interrupts:
+//128: attempt mutex aquire
+//129: mutex release
+//130: task end
+//131: task start
+//132: read one character from keyboard input queue
+//133: flush keyboard input queue
+
+//hardware interrupts:
+//256: switch to next task
+
+//262: keyboard input
+
+def prints char# string : {
+	__nosave string;
+	asm string;
+	"push	ra"
+	"int	r0"
+	"pop	ra";;
+	return;
+}
+
+def printc char c : {
+	__nosave c;
+	asm c;
+	"push	ra"
+	"inti	1"
+	"pop	ra";;
+	return;
+}
+
+def readc : char {
+	char c;
+	asm;
+	"push	ra"
+	"inti	3"
+	"pop	ra";
+	c;
+	return c;
+}
+
+def reads char# stringbuf int strlen: {
+	__nosave stringbuf;
+	__nosave strlen;
+	asm stringbuf strlen;
+	"push	ra"
+	"inti	2"
+	"pop	ra";;
+	return;
+}
+
+def edits char# stringbuf int strlen: {
+	__nosave stringbuf;
+	__nosave strlen;
+	asm stringbuf strlen;
+	"push	ra"
+	"inti	8"
+	"pop	ra";;
+	return;
+}
+
+def scroll_screen : {
+	asm;
+	"push	ra"
+	"inti	4"
+	"pop	ra";;
+	return;
+}
+
+def fill char c : {
+	__nosave c;
+	asm c;
+	"push	ra"
+	"inti	5"
+	"pop	ra";;
+	return;
+}
+
+//these two set the font and bg color for rendering,
+//and as such need to reference the text lib through interrupt
+def setbgcol int col : {
+	__nosave col;
+	asm col;
+	"push	ra"
+	"inti	6"
+	"pop	ra";;
+	return;
+}
+
+def setfgcol int col : {
+	__nosave col;
+	asm col;
+	"push	ra"
+	"inti	7"
+	"pop	ra";;
+	return;
+}
+
+def startTask func0 f : int{
+	int success;
+	__nosave f;
+	asm f;
+	"push	ra"
+	"inti	131"
+	"pop	ra";
+	success;
+	return success;
+}
+
+def endTask : {
+	asm;
+	"inti	130"
+	"halt";;//just in case
+	return;
+}
+
+//lets other tasks execute
+def sleep : {
+	asm;
+	"inti	256";;//hardware interrupt, no need to push ra
+	return;
+}
+
+//waits until it is possible to get the mutex, and gets it
+def mutexAquire int# mutex : {
+	int i;
+	asm mutex;
+	"inti	128";
+	i;
+	while i 0 ==; {
+		sleep $;
+		asm mutex;
+		"inti	128";
+		i;
+	}
+	return;
+}
+
+def mutexRelease int# mutex : {
+	__nosave mutex;
+	asm mutex;
+	"push	ra"
+	"inti	129"
+	"pop	ra";;
+	return;
+}
+
+def interruptRegister int ID func0 handler : {
+	__nosave ID;
+	__nosave handler;
+	asm ID handler;
+	"push	ra"
+	"inti	20"
+	"pop	ra";;
+	return;
+}
+
+def readTape int# buffer int len index : int {
+	__nosave buffer;
+	__nosave len;
+	__nosave index;
+	asm buffer len index;
+	"push	ra"
+	"inti	10"
+	"pop	ra";
+	index;
+	return index;
+}
+
+def writeTape int# buffer int len index : int {
+	__nosave buffer;
+	__nosave len;
+	__nosave index;
+	asm buffer len index;
+	"push	ra"
+	"inti	11"
+	"pop	ra";
+	index;
+	return index;
+}
+
+def readFile int# buffer int len index : int int {
+	int status;
+	__nosave buffer;
+	__nosave len;
+	__nosave index;
+	asm buffer len index status;
+	"push	ra"
+	"inti	12"
+	"pop	ra";
+	status index;
+	return status index;
+}
+
+def writeFile int# buffer int len index : int int {
+	int status;
+	__nosave buffer;
+	__nosave len;
+	__nosave index;
+	asm buffer len index status;
+	"push	ra"
+	"inti	13"
+	"pop	ra";
+	status index;
+	return status index;
+}
+
+def openFile char# fileName : int {
+	int index;
+	__nosave fileName;
+	asm fileName; 
+	"push	ra"
+	"inti	14"
+	"pop	ra";
+	index;
+	return index;
+}
+
+def makeFile char# fileName : int {
+	return fileName 1 1 makeFile_advanced$;
+}
+
+//do not use
+def makeFile_advanced char# fileName int type length : int {
+	__nosave fileName;
+	__nosave length;
+	__nosave type;
+	int index;
+	asm fileName type length;
+	"push	ra"
+	"inti	15"
+	"pop	ra";
+	index;
+	return index;
+}
+
+//**********************************************************************
+//non-os utility functions
+
+//stack memory allocation function
+def salloc int len : int# {
+	int# ret;
+	__nosave len;
+	asm len;
+	"add	sp, sp, r1"//this code depends heavily on compiler optimisations
+	"sub	r1, sp, r1";//if the rest of the function is changed, (for instance, checking for len < 0), this could break
+	ret;
+	__nosave ret;
+	return ret;
+}
+
+def strlen char# str : int {
+	int len;
+	len 0 =;
+	while str#; {
+		len++;
+		str++;
+	}
+	return len;
+}
+
+//returns the lowest set bit in an integer
+def lowbit int i : int {
+	int tmp;
+	tmp i 1- =;
+	tmp i &=;
+	return tmp i ^;
+}
+
+//returns the index of a single bit in a 32 bit word
+//assumes there is only one bit set in the word
+def bitnum int i : int {
+	int# datset;
+	asm; 
+	".data"
+	"BITNUM_DATASET:"
+	"0  1  28 2  29 14 24 3 30 22 20 15 25 17 4  8"
+  	"31 27 13 23 21 19 16 7 26 12 18 6  11 5  10 9"
+	".text"
+	"movi	r1, BITNUM_DATASET";
+	datset;
+	datset i 125613361 * 27 >> +=;
+	return datset#;
+	
+}
+
+def char_pack char c1 c2 c3 c4 : int {
+	int ret;
+	ret c4 24 << =;
+	ret c3 16 << |=;
+	ret c2 8 << |=;
+	ret c1 |=;
+	return ret;
+}
+
+def arrset int# arr int len val : {
+	while len-- 0 >=; {
+		arr val <-;
+		arr++;
+	}
+	return;
+}
+
+def strcmp char# str1 str2 int maxlen : int {
+	int i;
+	i 0 =;
+	
+	while i maxlen <; {
+		char c1;
+		c1 str1 i+# =;
+		char c2;
+		c2 str2 i+# =;
+		if c1 c2 != ; {
+			return 0;
+		} else if c1 0 == ; {
+			return 1;
+		}
+		i++;
+		__nosave c1;
+		__nosave c2;
+	}
+	return 1;
+}
+
+def itoa char# outStr int x base: {
+	int i;
+	i 0 =;
+	while x i 0 == |; {
+		int tmp;
+		tmp x base % =;
+		x base /=;
+		outStr "0123456789abcdef" tmp+# <-;
+		i++;
+		outStr++;
+	}
+	outStr 0 <-;
+	outStr--;
+	i--;
+	while i 0 >; {
+		char tmpchar;
+		tmpchar outStr# =;
+		outStr outStr i - # <-;
+		outStr i - tmpchar <-;
+		i 2 -=;
+		outStr--;
+	}
+	return;
+}
+
+def atoi char# str: int int {
+	int result;
+	result 0 =;
+	char c;
+	c str#=;
+	while c; {
+		if c "0"# < c "9" > |; {
+			return 0 0;
+		}		
+		result result 10 * c "0"#- + =;
+		c str++ #=;
+	}
+
+	return 1 result;
+}

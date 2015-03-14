@@ -19,19 +19,42 @@ public class ASMCode {
 	LinkedList<lineWrapper> functionLines = new LinkedList<lineWrapper>();
 	boolean hasFCall;
 	
-	
-	private interface lineWrapper {
-		String compile(int stacksize, boolean funcCall);
-	}
+
 	
 	private class stdLineWrapper implements lineWrapper {
-		private String line;
+		private String[] lines;
 		@Override
 		public String compile(int stacksize, boolean funcCall) {
-			return line;
+			String s = lines[0];
+			if(!(lines[0].startsWith("\t") || lines[0].startsWith(";") || lines[0].endsWith(":")) ) {
+				s = "\t"+s;
+			}
+			if(lines.length > 1) {
+				s+="\t"+lines[1];
+			}
+			for(int i = 2; i < lines.length; ++i) {
+				s+=", " + lines[i];
+			}
+			return s;
 		}
-		public stdLineWrapper(String s) {
-			line = s;
+		public stdLineWrapper(String[] s) {
+			lines = s;
+		}
+		@Override
+		public String getComponent(int i) {
+			if(i >= lines.length) {
+				throw new InternalCompilerException("WOAH, DID THE OPTIMISER JUST DO SOMETHING STUPID??:" + i + " WHEN LENGTH IS " + lines.length);
+			}
+			return lines[i];
+		}
+		@Override
+		public int getComponents() {
+			return lines.length;
+		}
+		@Override
+		public void setComponent(int i, String component) {
+			lines[i] = component;
+			
 		}
 	}
 	
@@ -52,23 +75,58 @@ public class ASMCode {
 			s.append("\tjmpr\tra");
 			return s.toString();
 		}
+
+		@Override
+		public String getComponent(int i) {
+			// TODO Auto-generated method stub
+			return "jmpr";
+		}
+
+		@Override
+		public int getComponents() {
+			return 1;
+		}
+
+		@Override
+		public void setComponent(int i, String component) {
+			// TODO Auto-generated method stub
+			
+		}
 	}
 	
 	public void add(String inst, String reg1, String reg2, String reg3) {
 		if(deadCode) return;
-		String newInst = "\t"+inst;
-		if(reg1 != null) {
-			newInst = newInst + "\t" + reg1;
-			if(reg2 != null) {
-				newInst = newInst + ", " + reg2;
-				if(reg3 != null) {
-					newInst = newInst + ", " + reg3;
-				}
-			}
+		if(Optimise.isBranch(inst) && !inst.equals("call") && !inst.equals("callr")) {
+			Optimise.optimiseUntilBranch(functionLines, 32, false);
 		}
-		functionLines.addLast(new stdLineWrapper(newInst));
+		
+		
+		String[] lines;
+		if(reg1 != null) {
+			if(reg2 != null) {
+				if(reg3 != null) {
+					lines = new String[4];
+					lines[0] = inst;
+					lines[1] = reg1;
+					lines[2] = reg2;
+					lines[3] = reg3;
+				} else {
+					lines = new String[3];
+					lines[0] = inst;
+					lines[1] = reg1;
+					lines[2] = reg2;
+				}
+			} else {
+				lines = new String[2];
+				lines[0] = inst;
+				lines[1] = reg1;
+			}
+		} else {
+			lines = new String[1];
+			lines[0] = inst;
+		}
+		functionLines.addLast(new stdLineWrapper(lines));
 	}
-	
 	public void add(String inst, String reg1, String reg2) {
 		add(inst, reg1, reg2, null);
 	}
@@ -99,8 +157,11 @@ public class ASMCode {
 	}
 	
 	public void put(String s) {
-		if(!deadCode)
-			functionLines.addLast(new stdLineWrapper(s));
+		if(!deadCode) {
+			String[] lines = new String[1];
+			lines[0] = s;
+			functionLines.addLast(new stdLineWrapper(lines));
+		}
 	}
 	
 	private String fname;
@@ -111,6 +172,7 @@ public class ASMCode {
 	}
 	
 	public void endFunction(int varCount) {
+		varCount = Optimise.removeUnneccessaryStores(functionLines);
 		lines.addLast("#global " + fname);
 		lines.addLast(fname+":");
 		if(hasFCall) {
@@ -121,20 +183,31 @@ public class ASMCode {
 			lines.addLast("\tmov\tfp, sp");
 			lines.addLast("\taddi\tsp, sp, " + varCount);
 		}
+		//TODO: go through the functionlines and remove all unneeded stores (ie. stores where the stored value is never read
 		for(lineWrapper w : functionLines) {
 			lines.addLast(w.compile(varCount, hasFCall));
 		}
 	}
 	
+	
+	public void functionCallOpts(int params) {
+		if(deadCode) return;
+		hasFCall = true;
+		Optimise.optimiseUntilBranch(functionLines, params, true);
+	}
 	public void setHasFCall() {
 		if(deadCode) return;
 		hasFCall = true;
 	}
 	
-	public void functionReturn() {
+	public void functionReturn(int params) {
 		if(deadCode) return;
+		Optimise.removeUnneccessaryStoresPreReturn(functionLines);
+		Optimise.optimiseUntilBranch(functionLines, params, true);
 		functionLines.addLast(new functionReturnWrapper());
 	}
+	
+	
 	
 	public void write(String filename) {
 		//System.out.println(".text");

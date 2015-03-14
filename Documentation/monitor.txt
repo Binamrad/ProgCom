@@ -37,10 +37,11 @@ locations of interest:
 
 label			address		size		contents
 
-GLOBAL_SCREEN		63488		see above	screen data
-GLOBAL_SCREEN_COLOR	62960		16		color map
-GLOBAL_SCREEN_MODE	62959		1		screen mode register
-GLOBAL_SCREEN_FONT	62976		512		font map
+GLOBAL_SCREEN		61440		see above	screen data
+GLOBAL_SCREEN_FONT	60928		512		font map
+GLOBAL_SCREEN_COLOR	60912		16		color map
+GLOBAL_SCREEN_MODE	60911		1		screen mode register
+GLOBAL_SCREEN_SCROLL	60910		1		screen memory offset, used for scrolling or double buffering
 
 detailed explaination:
 
@@ -98,3 +99,5 @@ GLOBAL_SCREEN_MODE
 
 when set to 0, the monitor will be set to mode A, text mode
 when set to 1, the monitor will be set to mode B, monochrome
+
+More drawing modes have been added, but since they have not been tested they are also not documented here. For more info, see the source.
